@@ -4,6 +4,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.types import BotCommand
 from config import settings
 from database.connection import db
 from database.models import init_database
@@ -37,6 +38,25 @@ async def shutdown(dp: Dispatcher, bot: Bot):
     logger.info("Bot stopped gracefully")
 
 
+async def setup_bot_commands(bot: Bot):
+    """Register command menu with icons in Telegram UI."""
+    await bot.set_my_commands(
+        [
+            BotCommand(command="start", description="🚀 Khởi động bot"),
+            BotCommand(command="help", description="📖 Hướng dẫn sử dụng"),
+            BotCommand(command="add", description="➕ Thêm sản phẩm raw"),
+            BotCommand(command="list", description="📋 Danh sách sản phẩm"),
+            BotCommand(command="find", description="🔍 Tìm sản phẩm"),
+            BotCommand(command="edit", description="✏️ Sửa theo ID"),
+            BotCommand(command="delete", description="🗑️ Xóa theo ID"),
+            BotCommand(command="export", description="📤 Xuất TXT/CSV"),
+            BotCommand(command="stats", description="📊 Thống kê"),
+            BotCommand(command="backup", description="💾 Sao lưu DB"),
+            BotCommand(command="cancel", description="❌ Hủy thao tác"),
+        ]
+    )
+
+
 async def main():
     logger.info("=" * 50)
     logger.info("Starting Telegram Bot Professional Edition")
@@ -62,6 +82,7 @@ async def main():
 
     await db.connect()
     await init_database()
+    await setup_bot_commands(bot)
 
     loop = asyncio.get_running_loop()
     setup_signal_handlers(loop, dp, bot)

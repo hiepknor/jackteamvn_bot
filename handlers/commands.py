@@ -16,6 +16,9 @@ from utils.logger import logger
 
 router = Router()
 
+MAX_ADD_LINES = 100
+MAX_RAW_LINE_LENGTH = 1000
+
 
 # =========================
 # Command Handlers
@@ -202,8 +205,22 @@ async def add_products_handler(message: Message, state: FSMContext):
         await message.answer("⚠️ Nội dung trống. Vui lòng gửi lại.")
         return
     
-    # Chỉ tách dòng và lưu tạm (không phân tích brand/model/price)
+    # Chỉ tách dòng và lưu raw text theo từng dòng (không parse field)
     lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        await message.answer("⚠️ Không có dòng hợp lệ để thêm.")
+        return
+    if len(lines) > MAX_ADD_LINES:
+        await message.answer(f"⚠️ Tối đa {MAX_ADD_LINES} dòng mỗi lần thêm.")
+        return
+
+    too_long = [idx for idx, line in enumerate(lines, 1) if len(line) > MAX_RAW_LINE_LENGTH]
+    if too_long:
+        await message.answer(
+            "⚠️ Có dòng vượt quá độ dài cho phép "
+            f"({MAX_RAW_LINE_LENGTH} ký tự). Dòng lỗi: {', '.join(map(str, too_long[:10]))}"
+        )
+        return
     
     # Lưu vào state
     await state.update_data(pending_products=lines)
@@ -215,7 +232,8 @@ async def add_products_handler(message: Message, state: FSMContext):
         ""
     ]
     for i, raw in enumerate(lines, 1):
-        preview_lines.append(f"{i}. <code>{escape(raw[:80])}</code>...")
+        suffix = "..." if len(raw) > 80 else ""
+        preview_lines.append(f"{i}. <code>{escape(raw[:80])}</code>{suffix}")
     
     preview_lines.extend([
         "",
@@ -238,7 +256,7 @@ async def add_confirm_handler(message: Message, state: FSMContext):
     
     count = 0
     for raw in pending_lines:
-        product_id = await product_repo.create(raw, {}, message.from_user.id)
+        product_id = await product_repo.create(raw, message.from_user.id)
         if product_id:
             count += 1
     
@@ -321,8 +339,7 @@ async def edit_confirm_handler(message: Message, state: FSMContext):
     new_line = data["new_line"]
     old_data = data["old_data"]
     
-    success = await product_repo.update(product_id, new_line, {},
-                                        message.from_user.id, old_data)
+    success = await product_repo.update(product_id, new_line, message.from_user.id, old_data)
     await state.clear()
     
     if success:
@@ -405,7 +422,9 @@ async def delete_choose_ids(message: Message, state: FSMContext):
         ""
     ]
     for product in products_to_delete:
-        preview_lines.append(f"• #{product['id']} {product['raw_text'][:60]}...")
+        preview_lines.append(
+            f"• <code>#{product['id']}</code> <code>{escape(product['raw_text'][:60])}</code>..."
+        )
 
     if invalid_parts:
         preview_lines.extend([
