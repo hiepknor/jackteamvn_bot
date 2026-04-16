@@ -45,7 +45,9 @@ class Settings(BaseSettings):
     
     @property
     def db_path(self) -> Path:
-        return self.base_dir / self.DB_NAME
+        path = self.base_dir / self.DB_NAME
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
     
     @property
     def export_dir(self) -> Path:
