@@ -1,4 +1,7 @@
+from html import escape
+
 from aiogram import Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, FSInputFile
@@ -213,11 +216,18 @@ async def add_products_handler(message: Message, state: FSMContext):
         ""
     ]
     for i, (raw, parsed) in enumerate(parsed_products, 1):
-        preview_lines.append(f"{i}. {raw[:80]}...")
-        preview_lines.append(f"   Brand: {parsed.get('brand')}, Model: {parsed.get('model')}, Price: {parsed.get('price_text')} {parsed.get('currency')}")
+        preview_lines.append(f"{i}. <code>{escape(raw[:80])}</code>...")
+        brand = escape(str(parsed.get("brand") or ""))
+        model = escape(str(parsed.get("model") or ""))
+        price_text = escape(str(parsed.get("price_text") or ""))
+        currency = escape(str(parsed.get("currency") or ""))
+        preview_lines.append(
+            f"   Brand: {brand}, Model: {model}, Price: {price_text} {currency}"
+        )
     
     if warnings:
-        preview_lines.extend(["", "⚠️ <b>Cảnh báo:</b>"] + warnings)
+        safe_warnings = [escape(w) for w in warnings]
+        preview_lines.extend(["", "⚠️ <b>Cảnh báo:</b>"] + safe_warnings)
     
     preview_lines.extend([
         "",
@@ -467,7 +477,7 @@ async def delete_confirm_handler(message: Message, state: FSMContext):
 async def _send_chunked_message(message: Message, text: str, chunk_size: int = 4000) -> None:
     """Gửi tin nhắn dài thành nhiều chunk"""
     if len(text) <= chunk_size:
-        await message.answer(text, parse_mode="HTML")
+        await _answer_html_with_fallback(message, text)
         return
     
     lines = text.splitlines(keepends=True)
@@ -476,19 +486,30 @@ async def _send_chunked_message(message: Message, text: str, chunk_size: int = 4
     for line in lines:
         if len(line) > chunk_size:
             if chunk:
-                await message.answer(chunk, parse_mode="HTML")
+                await _answer_html_with_fallback(message, chunk)
                 chunk = ""
             for i in range(0, len(line), chunk_size):
-                await message.answer(line[i:i + chunk_size], parse_mode="HTML")
+                await _answer_html_with_fallback(message, line[i:i + chunk_size])
             continue
 
         if len(chunk) + len(line) > chunk_size:
-            await message.answer(chunk, parse_mode="HTML")
+            await _answer_html_with_fallback(message, chunk)
             chunk = ""
         chunk += line
     
     if chunk:
-        await message.answer(chunk, parse_mode="HTML")
+        await _answer_html_with_fallback(message, chunk)
+
+
+async def _answer_html_with_fallback(message: Message, text: str) -> None:
+    """Ưu tiên gửi HTML, fallback sang text thường nếu parse lỗi."""
+    try:
+        await message.answer(text, parse_mode="HTML")
+    except TelegramBadRequest as exc:
+        if "can't parse entities" not in str(exc).lower():
+            raise
+        logger.warning("Telegram HTML parse lỗi, fallback plain text: %s", exc)
+        await message.answer(text)
 
 
 # =========================
@@ -496,6 +517,7 @@ async def _send_chunked_message(message: Message, text: str, chunk_size: int = 4
 # =========================
 
 @router.errors()
-async def error_handler(event, exception: Exception):
-    logger.exception(f"Error in handler: {exception}")
+async def error_handler(event):
+    exception = getattr(event, "exception", None)
+    logger.error("Error in handler: %s", exception, exc_info=exception)
     return True
