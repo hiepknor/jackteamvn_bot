@@ -48,10 +48,7 @@ class Exporter:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = settings.export_dir / f"products_{timestamp}.csv"
         
-        fieldnames = [
-            "id", "raw_text", "brand", "model", "dial_desc", "condition",
-            "date_info", "price_text", "currency", "note", "created_at", "updated_at"
-        ]
+        fieldnames = ["id", "raw_text", "created_at", "updated_at"]
         
         with path.open("w", encoding="utf-8-sig", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)

@@ -14,24 +14,9 @@ class ProductRepository:
             return int(row["total"]) if row else 0
     
     @staticmethod
-    async def create(raw_text: str, parsed_data: Dict[str, Any], user_id: int) -> Optional[int]:
+    async def create(raw_text: str, user_id: int) -> Optional[int]:
         async with db.get_cursor() as cursor:
-            await cursor.execute("""
-                INSERT INTO products 
-                (raw_text, brand, model, dial_desc, condition, date_info, 
-                 price_text, currency, note)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                raw_text,
-                parsed_data.get("brand"),
-                parsed_data.get("model"),
-                parsed_data.get("dial_desc"),
-                parsed_data.get("condition"),
-                parsed_data.get("date_info"),
-                parsed_data.get("price_text"),
-                parsed_data.get("currency"),
-                parsed_data.get("note"),
-            ))
+            await cursor.execute("INSERT INTO products (raw_text) VALUES (?)", (raw_text,))
             product_id = cursor.lastrowid
             
             # Audit log
@@ -46,14 +31,17 @@ class ProductRepository:
     @staticmethod
     async def get_by_id(product_id: int) -> Optional[Dict[str, Any]]:
         async with db.get_cursor() as cursor:
-            await cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+            await cursor.execute(
+                "SELECT id, raw_text, created_at, updated_at FROM products WHERE id = ?",
+                (product_id,),
+            )
             row = await cursor.fetchone()
             return dict(row) if row else None
     
     @staticmethod
     async def get_all(limit: Optional[int] = None, offset: int = 0) -> List[Dict[str, Any]]:
         async with db.get_cursor() as cursor:
-            sql = "SELECT * FROM products ORDER BY id DESC"
+            sql = "SELECT id, raw_text, created_at, updated_at FROM products ORDER BY id DESC"
             params: Tuple = ()
             if limit:
                 sql += " LIMIT ? OFFSET ?"
@@ -67,38 +55,24 @@ class ProductRepository:
         search_term = f"%{query.strip()}%"
         async with db.get_cursor() as cursor:
             await cursor.execute("""
-                SELECT * FROM products
+                SELECT id, raw_text, created_at, updated_at FROM products
                 WHERE raw_text LIKE ?
-                   OR COALESCE(model, '') LIKE ?
-                   OR COALESCE(dial_desc, '') LIKE ?
-                   OR COALESCE(note, '') LIKE ?
-                   OR COALESCE(brand, '') LIKE ?
                 ORDER BY id DESC
                 LIMIT ?
-            """, (search_term, search_term, search_term, search_term, search_term, limit or 50))
+            """, (search_term, limit or 50))
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
     
     @staticmethod
-    async def update(product_id: int, raw_text: str, parsed_data: Dict[str, Any], 
+    async def update(product_id: int, raw_text: str,
                      user_id: int, old_data: Dict[str, Any]) -> bool:
         async with db.get_cursor() as cursor:
             await cursor.execute("""
                 UPDATE products
-                SET raw_text = ?, brand = ?, model = ?, dial_desc = ?, condition = ?,
-                    date_info = ?, price_text = ?, currency = ?, note = ?,
-                    updated_at = CURRENT_TIMESTAMP
+                SET raw_text = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             """, (
                 raw_text,
-                parsed_data.get("brand"),
-                parsed_data.get("model"),
-                parsed_data.get("dial_desc"),
-                parsed_data.get("condition"),
-                parsed_data.get("date_info"),
-                parsed_data.get("price_text"),
-                parsed_data.get("currency"),
-                parsed_data.get("note"),
                 product_id,
             ))
             updated = cursor.rowcount > 0
@@ -109,7 +83,7 @@ class ProductRepository:
                     (user_id, action, entity_type, entity_id, old_value, new_value)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (user_id, "UPDATE", "product", product_id, 
-                      str(old_data), str(parsed_data)))
+                      str(old_data), raw_text))
                 logger.info(f"Product updated: ID={product_id}")
             
             return updated
@@ -152,21 +126,7 @@ class ProductRepository:
         async with db.get_cursor() as cursor:
             await cursor.execute("SELECT COUNT(*) AS total FROM products")
             total = (await cursor.fetchone())["total"]
-            
-            await cursor.execute("""
-                SELECT brand, COUNT(*) AS count 
-                FROM products 
-                WHERE brand IS NOT NULL 
-                GROUP BY brand 
-                ORDER BY count DESC 
-                LIMIT 10
-            """)
-            top_brands = await cursor.fetchall()
-            
-            return {
-                "total_products": total,
-                "top_brands": [dict(row) for row in top_brands]
-            }
+            return {"total_products": total}
     
     @staticmethod
     async def get_audit_log(user_id: Optional[int] = None, limit: int = 50) -> List[Dict[str, Any]]:

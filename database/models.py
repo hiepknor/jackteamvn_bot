@@ -13,14 +13,6 @@ async def init_database() -> None:
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 raw_text TEXT NOT NULL,
-                brand TEXT,
-                model TEXT,
-                dial_desc TEXT,
-                condition TEXT,
-                date_info TEXT,
-                price_text TEXT,
-                currency TEXT,
-                note TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
@@ -41,8 +33,6 @@ async def init_database() -> None:
         """)
         
         # Indexes for better performance
-        await cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand)")
-        await cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_model ON products(model)")
         await cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at)")
         await cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id)")
         

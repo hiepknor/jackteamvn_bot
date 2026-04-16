@@ -17,24 +17,9 @@ class MessageFormatter:
     
     @staticmethod
     def format_product_detail(row: Dict[str, Any]) -> str:
-        condition_emoji = {
-            "new": "🆕",
-            "used": "🔄",
-            "mint": "✨",
-            "excellent": "⭐",
-        }.get((row.get("condition") or "").lower(), "❓")
-        
         return (
             f"🆔 <b>ID:</b> <code>{MessageFormatter._safe(row.get('id', 'N/A'))}</code>\n"
             f"📋 <b>Raw:</b> <code>{MessageFormatter._safe(row.get('raw_text', ''))}</code>\n"
-            f"🏷️ <b>Brand:</b> {MessageFormatter._safe(row.get('brand'))}\n"
-            f"🔢 <b>Model:</b> {MessageFormatter._safe(row.get('model'))}\n"
-            f"🎨 <b>Desc:</b> {MessageFormatter._safe(row.get('dial_desc'))}\n"
-            f"{condition_emoji} <b>Condition:</b> {MessageFormatter._safe(row.get('condition'))}\n"
-            f"📅 <b>Date:</b> {MessageFormatter._safe(row.get('date_info'))}\n"
-            f"💰 <b>Price:</b> {MessageFormatter._safe(row.get('price_text'))}\n"
-            f"💱 <b>Currency:</b> {MessageFormatter._safe(row.get('currency'))}\n"
-            f"📝 <b>Note:</b> {MessageFormatter._safe(row.get('note'))}\n"
             f"🕐 <b>Created:</b> {MessageFormatter._safe(row.get('created_at', 'N/A'))}\n"
             f"🔄 <b>Updated:</b> {MessageFormatter._safe(row.get('updated_at', 'N/A'))}"
         )
@@ -84,21 +69,9 @@ class MessageFormatter:
     @staticmethod
     def format_stats(stats: Dict[str, Any]) -> str:
         """Format statistics message"""
-        lines = [
-            "📊 <b>Thống kê hệ thống</b>",
-            "",
-            f"📦 Tổng sản phẩm: <b>{stats['total_products']}</b>",
-            "",
-            "🏆 <b>Top thương hiệu:</b>"
-        ]
-        
-        top_brands = stats.get("top_brands", [])[:5]
-        if not top_brands:
-            lines.append("  • Chưa có dữ liệu phân loại thương hiệu")
-        else:
-            for brand_info in top_brands:
-                lines.append(f"  • {MessageFormatter._safe(brand_info['brand'])}: {brand_info['count']}")
-        
-        return "\n".join(lines)
+        return (
+            "📊 <b>Thống kê hệ thống</b>\n\n"
+            f"📦 Tổng sản phẩm: <b>{stats['total_products']}</b>"
+        )
 
 formatter = MessageFormatter()
