@@ -34,8 +34,12 @@ class DatabaseConnection:
     async def get_cursor(self) -> AsyncGenerator[aiosqlite.Cursor, None]:
         """Get cursor with auto-commit"""
         async with self.connection.cursor() as cursor:
-            yield cursor
-            await self.connection.commit()
+            try:
+                yield cursor
+                await self.connection.commit()
+            except Exception:
+                await self.connection.rollback()
+                raise
 
 
 db = DatabaseConnection(str(settings.db_path))

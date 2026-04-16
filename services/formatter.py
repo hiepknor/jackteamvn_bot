@@ -1,12 +1,19 @@
 from typing import List, Dict, Any, Optional
+from html import escape
 
 
 class MessageFormatter:
     """Message formatter for Jack Stock Bot"""
+
+    @staticmethod
+    def _safe(value: Any) -> str:
+        return escape(str(value)) if value is not None else "-"
     
     @staticmethod
     def format_product_short(row: Dict[str, Any]) -> str:
-        return f"🔹 #{row['id']} | {row['brand'] or 'N/A'} {row['model'] or 'N/A'} | {row['raw_text'][:50]}..."
+        product_id = MessageFormatter._safe(row.get("id", "N/A"))
+        raw_preview = MessageFormatter._safe((row.get("raw_text") or "")[:100])
+        return f"🔹 <code>#{product_id}</code> | <code>{raw_preview}</code>"
     
     @staticmethod
     def format_product_detail(row: Dict[str, Any]) -> str:
@@ -18,18 +25,18 @@ class MessageFormatter:
         }.get((row.get("condition") or "").lower(), "❓")
         
         return (
-            f"🆔 <b>ID:</b> <code>{row['id']}</code>\n"
-            f"📋 <b>Raw:</b> <code>{row['raw_text']}</code>\n"
-            f"🏷️ <b>Brand:</b> {row.get('brand') or '-'}\n"
-            f"🔢 <b>Model:</b> {row.get('model') or '-'}\n"
-            f"🎨 <b>Desc:</b> {row.get('dial_desc') or '-'}\n"
-            f"{condition_emoji} <b>Condition:</b> {row.get('condition') or '-'}\n"
-            f"📅 <b>Date:</b> {row.get('date_info') or '-'}\n"
-            f"💰 <b>Price:</b> {row.get('price_text') or '-'}\n"
-            f"💱 <b>Currency:</b> {row.get('currency') or '-'}\n"
-            f"📝 <b>Note:</b> {row.get('note') or '-'}\n"
-            f"🕐 <b>Created:</b> {row.get('created_at', 'N/A')}\n"
-            f"🔄 <b>Updated:</b> {row.get('updated_at', 'N/A')}"
+            f"🆔 <b>ID:</b> <code>{MessageFormatter._safe(row.get('id', 'N/A'))}</code>\n"
+            f"📋 <b>Raw:</b> <code>{MessageFormatter._safe(row.get('raw_text', ''))}</code>\n"
+            f"🏷️ <b>Brand:</b> {MessageFormatter._safe(row.get('brand'))}\n"
+            f"🔢 <b>Model:</b> {MessageFormatter._safe(row.get('model'))}\n"
+            f"🎨 <b>Desc:</b> {MessageFormatter._safe(row.get('dial_desc'))}\n"
+            f"{condition_emoji} <b>Condition:</b> {MessageFormatter._safe(row.get('condition'))}\n"
+            f"📅 <b>Date:</b> {MessageFormatter._safe(row.get('date_info'))}\n"
+            f"💰 <b>Price:</b> {MessageFormatter._safe(row.get('price_text'))}\n"
+            f"💱 <b>Currency:</b> {MessageFormatter._safe(row.get('currency'))}\n"
+            f"📝 <b>Note:</b> {MessageFormatter._safe(row.get('note'))}\n"
+            f"🕐 <b>Created:</b> {MessageFormatter._safe(row.get('created_at', 'N/A'))}\n"
+            f"🔄 <b>Updated:</b> {MessageFormatter._safe(row.get('updated_at', 'N/A'))}"
         )
     
     @staticmethod
@@ -38,22 +45,11 @@ class MessageFormatter:
         if not rows:
             return "📭 Hiện chưa có sản phẩm nào."
         
-        lines = [f"<b>{title}</b>", ""]
-        
-        grouped: Dict[str, List] = {}
+        lines = [f"<b>{escape(title)}</b>", ""]
         for row in rows:
-            brand = (row.get("brand") or "OTHER").upper()
-            grouped.setdefault(brand, []).append(row)
-
-        for brand in sorted(grouped.keys()):
-            lines.append(f"🏷️ <b>{brand}</b>")
-            for row in grouped[brand]:
-                lines.append(
-                    f"  • <code>#{row.get('id', 'N/A')}</code> | "
-                    f"{row.get('model') or 'N/A'} | "
-                    f"{(row.get('price_text') or '-')} {(row.get('currency') or '')}".rstrip()
-                )
-            lines.append("")
+            product_id = MessageFormatter._safe(row.get("id", "N/A"))
+            raw_preview = MessageFormatter._safe((row.get("raw_text") or "")[:120])
+            lines.append(f"• <code>#{product_id}</code> | <code>{raw_preview}</code>")
 
         if total is not None:
             lines.append(f"📦 Tổng trong hệ thống: <b>{total}</b>")
@@ -63,11 +59,12 @@ class MessageFormatter:
 
     @staticmethod
     def format_search_results(query: str, rows: List[Dict[str, Any]]) -> str:
+        query_safe = MessageFormatter._safe(query)
         if not rows:
-            return f"😕 Không tìm thấy sản phẩm nào với từ khóa: <b>{query}</b>"
+            return f"😕 Không tìm thấy sản phẩm nào với từ khóa: <b>{query_safe}</b>"
 
         lines = [
-            f"🔍 <b>Kết quả tìm kiếm:</b> <code>{query}</code>",
+            f"🔍 <b>Kết quả tìm kiếm:</b> <code>{query_safe}</code>",
             f"📄 Tìm thấy: <b>{len(rows)}</b> sản phẩm",
             "",
         ]
@@ -79,8 +76,8 @@ class MessageFormatter:
     @staticmethod
     def format_confirmation(action: str, details: str) -> str:
         return (
-            f"⚠️ <b>Xác nhận {action}?</b>\n"
-            f"{details}\n\n"
+            f"⚠️ <b>Xác nhận {escape(action)}?</b>\n"
+            f"{escape(details)}\n\n"
             f"Gõ <code>yes</code> để xác nhận hoặc nhập nội dung khác để hủy."
         )
 
@@ -95,8 +92,12 @@ class MessageFormatter:
             "🏆 <b>Top thương hiệu:</b>"
         ]
         
-        for brand_info in stats.get("top_brands", [])[:5]:
-            lines.append(f"  • {brand_info['brand']}: {brand_info['count']}")
+        top_brands = stats.get("top_brands", [])[:5]
+        if not top_brands:
+            lines.append("  • Chưa có dữ liệu phân loại thương hiệu")
+        else:
+            for brand_info in top_brands:
+                lines.append(f"  • {MessageFormatter._safe(brand_info['brand'])}: {brand_info['count']}")
         
         return "\n".join(lines)
 

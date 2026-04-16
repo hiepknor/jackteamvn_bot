@@ -10,7 +10,6 @@ from handlers.filters import IsAdmin
 from handlers.states import AddProductState, EditProductState, DeleteProductState
 from database.repositories import product_repo
 from database.models import backup_database
-from services.parser import product_parser
 from services.formatter import formatter
 from services.exporter import exporter
 from utils.logger import logger
@@ -71,6 +70,7 @@ async def cmd_cancel(message: Message, state: FSMContext):
 
 @router.message(Command("list"), IsAdmin())
 async def cmd_list(message: Message, command: CommandObject):
+    max_limit = 500
     try:
         limit = int(command.args) if command.args else None
     except ValueError:
@@ -79,6 +79,9 @@ async def cmd_list(message: Message, command: CommandObject):
 
     if limit is not None and limit <= 0:
         await message.answer("⚠️ Số lượng phải là số nguyên dương. Dùng: /list [số]")
+        return
+    if limit is not None and limit > max_limit:
+        await message.answer(f"⚠️ Tối đa {max_limit} sản phẩm mỗi lần. Dùng: /list [số <= {max_limit}]")
         return
     
     total = await product_repo.count()
@@ -107,7 +110,7 @@ async def cmd_find(message: Message, command: CommandObject):
     rows = await product_repo.search(query, limit=50)
     if not rows:
         await message.answer(
-            f"😕 Không tìm thấy sản phẩm nào với từ khóa: <b>{query}</b>",
+            f"😕 Không tìm thấy sản phẩm nào với từ khóa: <b>{escape(query)}</b>",
             parse_mode="HTML"
         )
         return
@@ -138,10 +141,14 @@ async def cmd_export(message: Message):
             caption=f"📊 File CSV ({total} sản phẩm)"
         )
         
-        await wait_msg.delete()
     except Exception as e:
         logger.error(f"Export failed: {e}")
         await message.answer(f"❌ Lỗi khi xuất file: {str(e)}")
+    finally:
+        try:
+            await wait_msg.delete()
+        except Exception:
+            pass
 
 
 @router.message(Command("stats"), IsAdmin())
@@ -157,14 +164,17 @@ async def cmd_backup(message: Message):
     try:
         backup_path = await backup_database()
         if backup_path:
-            await message.answer(f"✅ Đã sao lưu: <code>{backup_path}</code>", parse_mode="HTML")
+            await message.answer(f"✅ Đã sao lưu: <code>{escape(backup_path)}</code>", parse_mode="HTML")
         else:
             await message.answer("⚠️ Sao lưu bị tắt trong cấu hình.")
-        
-        await wait_msg.delete()
     except Exception as e:
         logger.error(f"Backup failed: {e}")
         await message.answer(f"❌ Lỗi khi sao lưu: {str(e)}")
+    finally:
+        try:
+            await wait_msg.delete()
+        except Exception:
+            pass
 
 
 # =========================
@@ -192,22 +202,11 @@ async def add_products_handler(message: Message, state: FSMContext):
         await message.answer("⚠️ Nội dung trống. Vui lòng gửi lại.")
         return
     
-    # Parse và lưu tạm
+    # Chỉ tách dòng và lưu tạm (không phân tích brand/model/price)
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    parsed_products = []
-    warnings = []
-    
-    for line in lines:
-        parsed = product_parser.parse(line)
-        parsed_products.append((line, parsed))
-        _, line_warnings = product_parser.validate_parsed_data(parsed)
-        warnings.extend([f"#{len(parsed_products)}: {w}" for w in line_warnings])
     
     # Lưu vào state
-    await state.update_data(
-        pending_products=parsed_products,
-        warnings=warnings
-    )
+    await state.update_data(pending_products=lines)
     await state.set_state(AddProductState.confirm)
     
     # Hiển thị preview
@@ -215,24 +214,13 @@ async def add_products_handler(message: Message, state: FSMContext):
         "📋 <b>Preview sản phẩm sẽ thêm:</b>",
         ""
     ]
-    for i, (raw, parsed) in enumerate(parsed_products, 1):
+    for i, raw in enumerate(lines, 1):
         preview_lines.append(f"{i}. <code>{escape(raw[:80])}</code>...")
-        brand = escape(str(parsed.get("brand") or ""))
-        model = escape(str(parsed.get("model") or ""))
-        price_text = escape(str(parsed.get("price_text") or ""))
-        currency = escape(str(parsed.get("currency") or ""))
-        preview_lines.append(
-            f"   Brand: {brand}, Model: {model}, Price: {price_text} {currency}"
-        )
-    
-    if warnings:
-        safe_warnings = [escape(w) for w in warnings]
-        preview_lines.extend(["", "⚠️ <b>Cảnh báo:</b>"] + safe_warnings)
     
     preview_lines.extend([
         "",
-        formatter.format_confirmation("thêm", f"{len(parsed_products)} sản phẩm"),
-        f"Tổng: {len(parsed_products)} sản phẩm"
+        formatter.format_confirmation("thêm", f"{len(lines)} sản phẩm"),
+        f"Tổng: {len(lines)} sản phẩm"
     ])
     
     await _send_chunked_message(message, "\n".join(preview_lines))
@@ -246,11 +234,11 @@ async def add_confirm_handler(message: Message, state: FSMContext):
         return
     
     data = await state.get_data()
-    parsed_products = data.get("pending_products", [])
+    pending_lines = data.get("pending_products", [])
     
     count = 0
-    for raw, parsed in parsed_products:
-        product_id = await product_repo.create(raw, parsed, message.from_user.id)
+    for raw in pending_lines:
+        product_id = await product_repo.create(raw, {}, message.from_user.id)
         if product_id:
             count += 1
     
@@ -308,10 +296,8 @@ async def edit_new_line(message: Message, state: FSMContext):
     
     data = await state.get_data()
     product_id = data["product_id"]
-    
-    parsed = product_parser.parse(new_line)
-    
-    await state.update_data(new_line=new_line, parsed_data=parsed)
+
+    await state.update_data(new_line=new_line)
     await state.set_state(EditProductState.confirm)
     
     await message.answer(
@@ -333,10 +319,9 @@ async def edit_confirm_handler(message: Message, state: FSMContext):
     data = await state.get_data()
     product_id = data["product_id"]
     new_line = data["new_line"]
-    parsed_data = data["parsed_data"]
     old_data = data["old_data"]
     
-    success = await product_repo.update(product_id, new_line, parsed_data, 
+    success = await product_repo.update(product_id, new_line, {},
                                         message.from_user.id, old_data)
     await state.clear()
     
