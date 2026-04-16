@@ -1,5 +1,6 @@
 from typing import Optional, List, Tuple, Dict, Any
 from database.connection import db
+from services.normalizer import normalizer
 from utils.logger import logger
 
 
@@ -14,7 +15,7 @@ class ProductRepository:
             return int(row["total"]) if row else 0
     
     @staticmethod
-    async def create(normalized_text: str, user_id: int, normalizer_version: str = "v1") -> Optional[int]:
+    async def create(normalized_text: str, user_id: int, normalizer_version: str = "v2") -> Optional[int]:
         async with db.get_cursor() as cursor:
             await cursor.execute(
                 "INSERT INTO products (normalized_text, normalizer_version) VALUES (?, ?)",
@@ -63,15 +64,52 @@ class ProductRepository:
     
     @staticmethod
     async def search(query: str, limit: Optional[int] = 50) -> List[Dict[str, Any]]:
-        search_term = f"%{query.strip()}%"
+        def _escape_like(value: str) -> str:
+            return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+        variants = normalizer.search_variants(query)
+        if not variants:
+            return []
+
+        conditions: List[str] = []
+        params: List[str | int] = []
+        primary = variants[0]
+        escaped_primary = _escape_like(primary)
+
+        # Phrase match for each variant.
+        for variant in variants:
+            escaped_variant = _escape_like(variant)
+            conditions.append("normalized_text LIKE ? ESCAPE '\\'")
+            params.append(f"%{escaped_variant}%")
+
+            tokens = [token for token in variant.split() if len(token) >= 2]
+            if len(tokens) >= 2:
+                token_clauses = []
+                for token in tokens:
+                    token_clauses.append("normalized_text LIKE ? ESCAPE '\\'")
+                    params.append(f"%{_escape_like(token)}%")
+                conditions.append("(" + " AND ".join(token_clauses) + ")")
+
+        where_clause = " OR ".join(conditions)
         async with db.get_cursor() as cursor:
-            await cursor.execute("""
+            await cursor.execute(f"""
                 SELECT id, normalized_text, normalizer_version, created_at, updated_at
                 FROM products
-                WHERE normalized_text LIKE ?
-                ORDER BY id DESC
+                WHERE {where_clause}
+                ORDER BY
+                    CASE
+                        WHEN normalized_text = ? THEN 0
+                        WHEN normalized_text LIKE ? ESCAPE '\\' THEN 1
+                        ELSE 2
+                    END,
+                    id DESC
                 LIMIT ?
-            """, (search_term, limit or 50))
+            """, (
+                *params,
+                primary,
+                f"{escaped_primary}%",
+                limit or 50,
+            ))
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
     
@@ -81,7 +119,7 @@ class ProductRepository:
         normalized_text: str,
         user_id: int,
         old_data: Dict[str, Any],
-        normalizer_version: str = "v1",
+        normalizer_version: str = "v2",
     ) -> bool:
         async with db.get_cursor() as cursor:
             await cursor.execute("""

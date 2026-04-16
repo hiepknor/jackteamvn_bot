@@ -1,8 +1,10 @@
 from database.connection import db
 from utils.logger import logger
 import shutil
+import sqlite3
 from datetime import datetime
 from config import settings
+from pathlib import Path
 
 
 async def init_database() -> None:
@@ -80,3 +82,61 @@ async def backup_database() -> str:
     shutil.copy2(settings.db_path, backup_path)
     logger.info(f"Database backed up to: {backup_path}")
     return str(backup_path)
+
+
+def _is_sqlite_db_valid(path: Path) -> bool:
+    """Best-effort validation for SQLite file."""
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        conn = sqlite3.connect(str(path))
+        try:
+            cursor = conn.execute("PRAGMA quick_check")
+            result = cursor.fetchone()
+            return bool(result and str(result[0]).lower() == "ok")
+        finally:
+            conn.close()
+    except Exception:
+        return False
+
+
+def restore_latest_backup_if_needed() -> str:
+    """
+    Restore latest backup when DB is missing or invalid.
+    Returns status: "valid", "restored", "new", "failed".
+    """
+    db_path = settings.db_path
+    if _is_sqlite_db_valid(db_path):
+        return "valid"
+
+    backups = sorted(
+        db_path.parent.glob("jackteamvn_backup_*.db"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+
+    valid_backup = next((b for b in backups if _is_sqlite_db_valid(b)), None)
+    if not valid_backup:
+        if db_path.exists():
+            try:
+                broken_path = db_path.parent / f"{db_path.stem}.corrupt_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+                db_path.rename(broken_path)
+                logger.warning("Current DB seems invalid, moved to: %s", broken_path)
+            except Exception as exc:
+                logger.error("Failed to move invalid DB file: %s", exc, exc_info=exc)
+                return "failed"
+        logger.warning("No valid backup found. Bot will initialize a new database.")
+        return "new"
+
+    try:
+        if db_path.exists():
+            broken_path = db_path.parent / f"{db_path.stem}.corrupt_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+            db_path.rename(broken_path)
+            logger.warning("Current DB seems invalid, moved to: %s", broken_path)
+
+        shutil.copy2(valid_backup, db_path)
+        logger.info("Database restored from latest backup: %s", valid_backup)
+        return "restored"
+    except Exception as exc:
+        logger.error("Failed to restore database from backup: %s", exc, exc_info=exc)
+        return "failed"

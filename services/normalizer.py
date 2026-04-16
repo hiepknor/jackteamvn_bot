@@ -80,5 +80,26 @@ class ProductNormalizer:
         normalized = re.sub(r"\b(\d+(?:\.\d+)?)\s*M\b", r"\1m", normalized)
         return normalized
 
+    @classmethod
+    def search_variants(cls, query: str) -> list[str]:
+        base = (query or "").strip()
+        if not base:
+            return []
+
+        normalized = cls.normalize(base)
+        variants: list[str] = []
+        for value in (base, normalized):
+            compact = re.sub(r"\s{2,}", " ", value.strip())
+            if compact and compact not in variants:
+                variants.append(compact)
+
+        if normalized:
+            if "full set" in normalized and "fullset" not in variants:
+                variants.append(normalized.replace("full set", "fullset"))
+            if "fullset" in normalized and "full set" not in variants:
+                variants.append(normalized.replace("fullset", "full set"))
+
+        return variants
+
 
 normalizer = ProductNormalizer()

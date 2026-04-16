@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, FSInputFile
 
 from handlers.filters import IsAdmin
-from handlers.states import AddProductState, EditProductState, DeleteProductState
+from handlers.states import AddProductState, EditProductState, DeleteProductState, FindProductState
 from database.repositories import product_repo
 from database.models import backup_database
 from services.formatter import formatter
@@ -40,6 +40,7 @@ async def cmd_start(message: Message, state: FSMContext):
         f"➕ /add — Thêm sản phẩm mới\n"
         f"✏️ /edit — Sửa sản phẩm theo ID\n"
         f"🗑️ /delete — Xóa sản phẩm theo ID\n"
+        f"🗑️ /delete 1,2,3 — Xóa nhanh nhiều ID\n"
         f"📤 /export — Xuất file TXT và CSV\n"
         f"📊 /stats — Xem thống kê chi tiết\n"
         f"🧹 /normalize — Chuẩn hóa toàn bộ dữ liệu\n"
@@ -59,7 +60,8 @@ async def cmd_help(message: Message):
         "🔍 <b>/find &lt;từ khóa&gt;</b> — Tìm kiếm sản phẩm\n\n"
         "➕ <b>/add</b> — Thêm sản phẩm mới (có xác nhận)\n\n"
         "✏️ <b>/edit</b> — Sửa sản phẩm theo ID\n\n"
-        "🗑️ <b>/delete</b> — Xóa sản phẩm theo ID(s)\n\n"
+        "🗑️ <b>/delete</b> — Xóa sản phẩm theo ID(s)\n"
+        "🗑️ <b>/delete 1,2,3</b> — Nhập nhanh ID cần xóa\n\n"
         "📤 <b>/export</b> — Xuất file TXT & CSV\n\n"
         "📊 <b>/stats</b> — Xem thống kê hệ thống\n\n"
         "🧹 <b>/normalize</b> — Chuẩn hóa toàn bộ dữ liệu hiện có\n\n"
@@ -122,27 +124,50 @@ async def cmd_list(message: Message, command: CommandObject):
     await _send_chunked_message(message, text)
 
 
-@router.message(Command("find"), IsAdmin())
-async def cmd_find(message: Message, command: CommandObject):
-    query = (command.args or "").strip()
-    if not query:
-        await message.answer(
-            "⚠️ Dùng: <code>/find &lt;từ khóa&gt;</code>\n"
-            "Ví dụ: <code>/find 126528LN</code>",
-            parse_mode="HTML"
-        )
-        return
-    
+async def _perform_find(message: Message, query: str) -> None:
     rows = await product_repo.search(query, limit=50)
     if not rows:
         await message.answer(
-            f"😕 Không tìm thấy sản phẩm nào với từ khóa: <b>{escape(query)}</b>",
-            parse_mode="HTML"
+            "😕 <b>Chưa tìm thấy sản phẩm phù hợp.</b>\n\n"
+            f"🔎 Từ khóa: <code>{escape(query)}</code>\n"
+            "💡 Bạn có thể thử:\n"
+            "• Đổi từ khóa ngắn hơn (ví dụ mã ref)\n"
+            "• Dùng một phần từ khóa (ví dụ: <code>67-02</code>)\n"
+            "• Xem lại danh sách bằng <code>/list 20</code>",
+            parse_mode="HTML",
         )
         return
-    
+
     text = formatter.format_search_results(query, rows)
     await _send_chunked_message(message, text)
+
+
+@router.message(Command("find"), IsAdmin())
+async def cmd_find(message: Message, command: CommandObject, state: FSMContext):
+    query = (command.args or "").strip()
+    if not query:
+        await state.set_state(FindProductState.awaiting_query)
+        await message.answer(
+            "🔍 <b>Bạn muốn tìm gì?</b>\n"
+            "Hãy gửi từ khóa ở tin nhắn tiếp theo.\n\n"
+            "Ví dụ: <code>126528LN</code> hoặc <code>67-02</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    await state.clear()
+    await _perform_find(message, query)
+
+
+@router.message(FindProductState.awaiting_query, IsAdmin())
+async def find_query_handler(message: Message, state: FSMContext):
+    query = (message.text or "").strip()
+    if not query:
+        await message.answer("⚠️ Từ khóa đang trống. Vui lòng nhập lại.")
+        return
+
+    await state.clear()
+    await _perform_find(message, query)
 
 
 @router.message(Command("export"), IsAdmin())
@@ -465,34 +490,19 @@ async def edit_confirm_handler(message: Message, state: FSMContext):
 # Delete Flow
 # =========================
 
-@router.message(Command("delete"), IsAdmin())
-async def cmd_delete(message: Message, state: FSMContext):
-    await state.clear()
-    await state.set_state(DeleteProductState.product_ids)
-    
-    rows = await product_repo.get_all(limit=20)
-    total = await product_repo.count()
-    text = formatter.format_product_list(rows, "📋 Sản phẩm gần nhất (20)", total=total)
-    
-    await _send_chunked_message(
-        message, 
-        text + "\n\n🗑️ <b>Nhập 1 hoặc nhiều ID cần xóa:</b>\nVí dụ: <code>1,2,3,5</code>"
-    )
 
-
-@router.message(DeleteProductState.product_ids, IsAdmin())
-async def delete_choose_ids(message: Message, state: FSMContext):
-    text = (message.text or "").strip()
+async def _handle_delete_ids_input(message: Message, state: FSMContext, text: str) -> None:
+    text = (text or "").strip()
     if not text:
         await message.answer("⚠️ Vui lòng nhập ID cần xóa.")
         return
-    
+
     # Parse IDs
     import re
     raw_parts = re.split(r"[,\s]+", text.strip())
     ids = []
     invalid_parts = []
-    
+
     for part in raw_parts:
         part = part.strip()
         if not part:
@@ -501,31 +511,48 @@ async def delete_choose_ids(message: Message, state: FSMContext):
             ids.append(int(part))
         else:
             invalid_parts.append(part)
-    
+
     ids = list(dict.fromkeys(ids))  # Remove duplicates
-    
+
     if not ids:
         await message.answer("⚠️ Không có ID hợp lệ. Ví dụ: <code>1,2,3,5</code>")
         return
-    
+
     # Show preview
     products_to_delete = []
     not_found_ids = []
-    
+
     for product_id in ids:
         product = await product_repo.get_by_id(product_id)
         if product:
             products_to_delete.append(product)
         else:
             not_found_ids.append(product_id)
-    
+
+    if not products_to_delete:
+        lines = ["⚠️ Không có sản phẩm hợp lệ để xóa."]
+        if invalid_parts:
+            lines.append(f"ID không hợp lệ đã bỏ qua: {', '.join(invalid_parts)}")
+        if not_found_ids:
+            lines.append(f"Không tìm thấy: {', '.join(map(str, not_found_ids))}")
+
+        current_state = await state.get_state()
+        if current_state == DeleteProductState.product_ids.state:
+            lines.append("Vui lòng nhập lại ID hoặc /cancel để hủy.")
+        else:
+            await state.clear()
+            lines.append("Thử lại với cú pháp: /delete 1,2,3")
+
+        await message.answer("\n".join(lines), parse_mode="HTML")
+        return
+
     await state.update_data(
         delete_ids=ids,
         not_found_ids=not_found_ids,
         products_to_delete=products_to_delete
     )
     await state.set_state(DeleteProductState.confirm)
-    
+
     preview_lines = [
         "🗑️ <b>Xác nhận xóa:</b>",
         ""
@@ -542,19 +569,44 @@ async def delete_choose_ids(message: Message, state: FSMContext):
             "",
             f"⚠️ ID không hợp lệ đã bỏ qua: {', '.join(invalid_parts)}"
         ])
-    
+
     if not_found_ids:
         preview_lines.extend([
             "",
             f"⚠️ Không tìm thấy: {', '.join(map(str, not_found_ids))}"
         ])
-    
+
     preview_lines.extend([
         "",
         formatter.format_confirmation("xóa", f"{len(products_to_delete)} sản phẩm")
     ])
-    
+
     await _send_chunked_message(message, "\n".join(preview_lines))
+
+
+@router.message(Command("delete"), IsAdmin())
+async def cmd_delete(message: Message, state: FSMContext, command: CommandObject):
+    await state.clear()
+    args = (command.args or "").strip()
+    if args:
+        await _handle_delete_ids_input(message, state, args)
+        return
+
+    await state.set_state(DeleteProductState.product_ids)
+
+    rows = await product_repo.get_all(limit=20)
+    total = await product_repo.count()
+    text = formatter.format_product_list(rows, "📋 Sản phẩm gần nhất (20)", total=total)
+
+    await _send_chunked_message(
+        message,
+        text + "\n\n🗑️ <b>Nhập 1 hoặc nhiều ID cần xóa:</b>\nVí dụ: <code>1,2,3,5</code>"
+    )
+
+
+@router.message(DeleteProductState.product_ids, IsAdmin())
+async def delete_choose_ids(message: Message, state: FSMContext):
+    await _handle_delete_ids_input(message, state, message.text or "")
 
 
 @router.message(DeleteProductState.confirm, IsAdmin())

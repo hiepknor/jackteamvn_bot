@@ -7,7 +7,7 @@ from aiogram.enums import ParseMode
 from aiogram.types import BotCommand
 from config import settings
 from database.connection import db
-from database.models import init_database
+from database.models import init_database, restore_latest_backup_if_needed
 from handlers.commands import router as commands_router
 from utils.logger import logger
 
@@ -80,6 +80,14 @@ async def main():
     dp = Dispatcher(storage=storage)
 
     dp.include_router(commands_router)
+
+    restore_status = restore_latest_backup_if_needed()
+    if restore_status == "restored":
+        logger.info("Startup DB restore completed from latest backup.")
+    elif restore_status == "new":
+        logger.info("Startup DB restore skipped: no valid backup, initialize fresh DB.")
+    elif restore_status == "failed":
+        logger.warning("Startup DB restore failed; bot will continue with current DB path.")
 
     await db.connect()
     await init_database()

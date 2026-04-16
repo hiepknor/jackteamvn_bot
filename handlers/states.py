@@ -18,3 +18,8 @@ class DeleteProductState(StatesGroup):
     """State group for deleting products"""
     product_ids = State()
     confirm = State()
+
+
+class FindProductState(StatesGroup):
+    """State group for finding products"""
+    awaiting_query = State()
