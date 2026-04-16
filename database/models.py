@@ -100,22 +100,63 @@ def _is_sqlite_db_valid(path: Path) -> bool:
         return False
 
 
+def _get_product_count(path: Path) -> int | None:
+    """Read products count from a SQLite file; None if unreadable."""
+    if not _is_sqlite_db_valid(path):
+        return None
+    try:
+        conn = sqlite3.connect(str(path))
+        try:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='products'"
+            )
+            if cursor.fetchone() is None:
+                return 0
+            row = conn.execute("SELECT COUNT(*) FROM products").fetchone()
+            return int(row[0]) if row else 0
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
 def restore_latest_backup_if_needed() -> str:
     """
     Restore latest backup when DB is missing or invalid.
     Returns status: "valid", "restored", "new", "failed".
     """
     db_path = settings.db_path
-    if _is_sqlite_db_valid(db_path):
-        return "valid"
-
     backups = sorted(
         db_path.parent.glob("jackteamvn_backup_*.db"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
+    valid_backups = [b for b in backups if _is_sqlite_db_valid(b)]
+    current_count = _get_product_count(db_path)
 
-    valid_backup = next((b for b in backups if _is_sqlite_db_valid(b)), None)
+    # DB is usable; only restore when DB looks empty but backup has real data.
+    if current_count is not None:
+        if current_count > 0:
+            return "valid"
+
+        richer_backup = next((b for b in valid_backups if (_get_product_count(b) or 0) > 0), None)
+        if not richer_backup:
+            return "valid"
+
+        try:
+            broken_path = db_path.parent / f"{db_path.stem}.empty_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+            db_path.rename(broken_path)
+            shutil.copy2(richer_backup, db_path)
+            logger.info(
+                "Database was empty; restored from latest non-empty backup: %s",
+                richer_backup,
+            )
+            return "restored"
+        except Exception as exc:
+            logger.error("Failed to restore from non-empty backup: %s", exc, exc_info=exc)
+            return "failed"
+
+    valid_backup = valid_backups[0] if valid_backups else None
     if not valid_backup:
         if db_path.exists():
             try:

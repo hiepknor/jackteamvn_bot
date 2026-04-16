@@ -48,7 +48,7 @@ async def setup_bot_commands(bot: Bot):
             BotCommand(command="list", description="📋 Danh sách sản phẩm"),
             BotCommand(command="find", description="🔍 Tìm sản phẩm"),
             BotCommand(command="edit", description="✏️ Sửa theo ID"),
-            BotCommand(command="delete", description="🗑️ Xóa theo ID"),
+            BotCommand(command="delete", description="🗑️ Xóa theo ID / 1,2,3"),
             BotCommand(command="export", description="📤 Xuất TXT/CSV"),
             BotCommand(command="stats", description="📊 Thống kê"),
             BotCommand(command="normalize", description="🧹 Chuẩn hóa toàn bộ DB"),
