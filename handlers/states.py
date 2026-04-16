@@ -18,8 +18,3 @@ class DeleteProductState(StatesGroup):
     """State group for deleting products"""
     product_ids = State()
     confirm = State()
-
-
-class SearchState(StatesGroup):
-    """State group for searching"""
-    keyword = State()

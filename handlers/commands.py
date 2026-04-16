@@ -1,8 +1,7 @@
-from aiogram import Router, F
+from aiogram import Router
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, FSInputFile
-from aiogram.utils.markdown import bold
 
 from handlers.filters import IsAdmin
 from handlers.states import AddProductState, EditProductState, DeleteProductState
@@ -11,7 +10,6 @@ from database.models import backup_database
 from services.parser import product_parser
 from services.formatter import formatter
 from services.exporter import exporter
-from config import settings
 from utils.logger import logger
 
 router = Router()
@@ -75,13 +73,17 @@ async def cmd_list(message: Message, command: CommandObject):
     except ValueError:
         await message.answer("⚠️ Số lượng không hợp lệ. Dùng: /list [số]")
         return
+
+    if limit is not None and limit <= 0:
+        await message.answer("⚠️ Số lượng phải là số nguyên dương. Dùng: /list [số]")
+        return
     
     total = await product_repo.count()
     rows = await product_repo.get_all(limit=limit or 50)
     
     text = formatter.format_product_list(
         rows, 
-        f"📋 Danh sách sản phẩm",
+        "📋 Danh sách sản phẩm",
         total=total
     )
     
@@ -188,14 +190,14 @@ async def add_products_handler(message: Message, state: FSMContext):
         return
     
     # Parse và lưu tạm
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
     parsed_products = []
     warnings = []
     
     for line in lines:
         parsed = product_parser.parse(line)
         parsed_products.append((line, parsed))
-        is_valid, line_warnings = product_parser.validate_parsed_data(parsed)
+        _, line_warnings = product_parser.validate_parsed_data(parsed)
         warnings.extend([f"#{len(parsed_products)}: {w}" for w in line_warnings])
     
     # Lưu vào state
@@ -296,7 +298,6 @@ async def edit_new_line(message: Message, state: FSMContext):
     
     data = await state.get_data()
     product_id = data["product_id"]
-    old_data = data["old_data"]
     
     parsed = product_parser.parse(new_line)
     
@@ -410,6 +411,12 @@ async def delete_choose_ids(message: Message, state: FSMContext):
     ]
     for product in products_to_delete:
         preview_lines.append(f"• #{product['id']} {product['raw_text'][:60]}...")
+
+    if invalid_parts:
+        preview_lines.extend([
+            "",
+            f"⚠️ ID không hợp lệ đã bỏ qua: {', '.join(invalid_parts)}"
+        ])
     
     if not_found_ids:
         preview_lines.extend([
@@ -467,6 +474,14 @@ async def _send_chunked_message(message: Message, text: str, chunk_size: int = 4
     chunk = ""
     
     for line in lines:
+        if len(line) > chunk_size:
+            if chunk:
+                await message.answer(chunk, parse_mode="HTML")
+                chunk = ""
+            for i in range(0, len(line), chunk_size):
+                await message.answer(line[i:i + chunk_size], parse_mode="HTML")
+            continue
+
         if len(chunk) + len(line) > chunk_size:
             await message.answer(chunk, parse_mode="HTML")
             chunk = ""

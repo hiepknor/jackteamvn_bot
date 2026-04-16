@@ -10,7 +10,7 @@ class ProductParser:
     KNOWN_BRANDS = {
         "RL", "PP", "AP", "OM", "TU", "CA", "SE", "RO", "PA", "AU",
         "ROLEX", "PATEK", "AUDEMARS", "OMEGA", "TUDOR", "CARTIER",
-        "SEIKO", "ROLEX", "PANERAI", "AUDEMARSPIGUET"
+        "SEIKO", "PANERAI", "AUDEMARSPIGUET"
     }
     
     @staticmethod

@@ -1,5 +1,5 @@
 from aiogram.filters import BaseFilter
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message
 from config import settings
 from utils.logger import logger
 
@@ -21,11 +21,3 @@ class IsAdmin(BaseFilter):
             )
         
         return is_admin
-
-
-class IsAdminCallback(BaseFilter):
-    """Filter for callback queries"""
-    
-    async def __call__(self, callback: CallbackQuery) -> bool:
-        user_id = callback.from_user.id
-        return user_id in settings.admin_id_list

@@ -2,7 +2,6 @@ import csv
 import os
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any
 from database.repositories import product_repo
 from config import settings
 from utils.logger import logger

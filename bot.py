@@ -10,17 +10,26 @@ from database.models import init_database
 from handlers.commands import router as commands_router
 from utils.logger import logger
 
+_is_shutting_down = False
 
-def setup_signal_handlers(dp: Dispatcher, bot: Bot):
-    loop = asyncio.get_event_loop()
+def setup_signal_handlers(loop: asyncio.AbstractEventLoop, dp: Dispatcher, bot: Bot):
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(
-            sig,
-            lambda: asyncio.create_task(shutdown(dp, bot))
-        )
+        try:
+            loop.add_signal_handler(
+                sig,
+                lambda: asyncio.create_task(shutdown(dp, bot))
+            )
+        except NotImplementedError:
+            logger.warning("Signal handlers are not supported on this platform")
+            break
 
 
 async def shutdown(dp: Dispatcher, bot: Bot):
+    global _is_shutting_down
+    if _is_shutting_down:
+        return
+    _is_shutting_down = True
+
     logger.info("Shutting down bot...")
     await dp.storage.close()
     await bot.session.close()
@@ -54,7 +63,8 @@ async def main():
     await db.connect()
     await init_database()
 
-    setup_signal_handlers(dp, bot)
+    loop = asyncio.get_running_loop()
+    setup_signal_handlers(loop, dp, bot)
 
     logger.info("Bot is running... Press Ctrl+C to stop.")
     try:
