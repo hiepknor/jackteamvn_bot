@@ -14,16 +14,19 @@ class ProductRepository:
             return int(row["total"]) if row else 0
     
     @staticmethod
-    async def create(raw_text: str, user_id: int) -> Optional[int]:
+    async def create(normalized_text: str, user_id: int, normalizer_version: str = "v1") -> Optional[int]:
         async with db.get_cursor() as cursor:
-            await cursor.execute("INSERT INTO products (raw_text) VALUES (?)", (raw_text,))
+            await cursor.execute(
+                "INSERT INTO products (normalized_text, normalizer_version) VALUES (?, ?)",
+                (normalized_text, normalizer_version),
+            )
             product_id = cursor.lastrowid
             
             # Audit log
             await cursor.execute("""
                 INSERT INTO audit_log (user_id, action, entity_type, entity_id, new_value)
                 VALUES (?, ?, ?, ?, ?)
-            """, (user_id, "CREATE", "product", product_id, raw_text))
+            """, (user_id, "CREATE", "product", product_id, normalized_text))
             
             logger.info(f"Product created: ID={product_id}")
             return product_id
@@ -32,7 +35,11 @@ class ProductRepository:
     async def get_by_id(product_id: int) -> Optional[Dict[str, Any]]:
         async with db.get_cursor() as cursor:
             await cursor.execute(
-                "SELECT id, raw_text, created_at, updated_at FROM products WHERE id = ?",
+                """
+                SELECT id, normalized_text, normalizer_version, created_at, updated_at
+                FROM products
+                WHERE id = ?
+                """,
                 (product_id,),
             )
             row = await cursor.fetchone()
@@ -41,7 +48,11 @@ class ProductRepository:
     @staticmethod
     async def get_all(limit: Optional[int] = None, offset: int = 0) -> List[Dict[str, Any]]:
         async with db.get_cursor() as cursor:
-            sql = "SELECT id, raw_text, created_at, updated_at FROM products ORDER BY id DESC"
+            sql = """
+                SELECT id, normalized_text, normalizer_version, created_at, updated_at
+                FROM products
+                ORDER BY id DESC
+            """
             params: Tuple = ()
             if limit:
                 sql += " LIMIT ? OFFSET ?"
@@ -55,8 +66,9 @@ class ProductRepository:
         search_term = f"%{query.strip()}%"
         async with db.get_cursor() as cursor:
             await cursor.execute("""
-                SELECT id, raw_text, created_at, updated_at FROM products
-                WHERE raw_text LIKE ?
+                SELECT id, normalized_text, normalizer_version, created_at, updated_at
+                FROM products
+                WHERE normalized_text LIKE ?
                 ORDER BY id DESC
                 LIMIT ?
             """, (search_term, limit or 50))
@@ -64,15 +76,21 @@ class ProductRepository:
             return [dict(row) for row in rows]
     
     @staticmethod
-    async def update(product_id: int, raw_text: str,
-                     user_id: int, old_data: Dict[str, Any]) -> bool:
+    async def update(
+        product_id: int,
+        normalized_text: str,
+        user_id: int,
+        old_data: Dict[str, Any],
+        normalizer_version: str = "v1",
+    ) -> bool:
         async with db.get_cursor() as cursor:
             await cursor.execute("""
                 UPDATE products
-                SET raw_text = ?, updated_at = CURRENT_TIMESTAMP
+                SET normalized_text = ?, normalizer_version = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             """, (
-                raw_text,
+                normalized_text,
+                normalizer_version,
                 product_id,
             ))
             updated = cursor.rowcount > 0
@@ -83,7 +101,7 @@ class ProductRepository:
                     (user_id, action, entity_type, entity_id, old_value, new_value)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (user_id, "UPDATE", "product", product_id, 
-                      str(old_data), raw_text))
+                      str(old_data), normalized_text))
                 logger.info(f"Product updated: ID={product_id}")
             
             return updated

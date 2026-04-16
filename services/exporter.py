@@ -35,7 +35,7 @@ class Exporter:
         
         with path.open("w", encoding="utf-8") as f:
             for row in reversed(rows):
-                f.write(f"{row['raw_text']}\n")
+                f.write(f"{row['normalized_text']}\n")
         
         logger.info(f"Exported {len(rows)} products to TXT: {path}")
         Exporter.cleanup_old_files()
@@ -48,7 +48,7 @@ class Exporter:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = settings.export_dir / f"products_{timestamp}.csv"
         
-        fieldnames = ["id", "raw_text", "created_at", "updated_at"]
+        fieldnames = ["id", "normalized_text", "normalizer_version", "created_at", "updated_at"]
         
         with path.open("w", encoding="utf-8-sig", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)

@@ -44,7 +44,7 @@ async def setup_bot_commands(bot: Bot):
         [
             BotCommand(command="start", description="🚀 Khởi động bot"),
             BotCommand(command="help", description="📖 Hướng dẫn sử dụng"),
-            BotCommand(command="add", description="➕ Thêm sản phẩm raw"),
+            BotCommand(command="add", description="➕ Thêm và chuẩn hóa sản phẩm"),
             BotCommand(command="list", description="📋 Danh sách sản phẩm"),
             BotCommand(command="find", description="🔍 Tìm sản phẩm"),
             BotCommand(command="edit", description="✏️ Sửa theo ID"),

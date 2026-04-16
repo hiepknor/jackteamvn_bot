@@ -12,10 +12,40 @@ async def init_database() -> None:
         await cursor.execute("""
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                raw_text TEXT NOT NULL,
+                normalized_text TEXT NOT NULL,
+                normalizer_version TEXT NOT NULL DEFAULT 'v1',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
+        """)
+
+        await cursor.execute("PRAGMA table_info(products)")
+        product_columns = {row["name"] for row in await cursor.fetchall()}
+
+        if "normalized_text" not in product_columns:
+            await cursor.execute("ALTER TABLE products ADD COLUMN normalized_text TEXT")
+            logger.info("Added products.normalized_text column")
+
+        if "normalizer_version" not in product_columns:
+            await cursor.execute("ALTER TABLE products ADD COLUMN normalizer_version TEXT DEFAULT 'v1'")
+            logger.info("Added products.normalizer_version column")
+
+        if "raw_text" in product_columns:
+            await cursor.execute("""
+                UPDATE products
+                SET normalized_text = TRIM(raw_text)
+                WHERE normalized_text IS NULL OR normalized_text = ''
+            """)
+
+        await cursor.execute("""
+            UPDATE products
+            SET normalized_text = ''
+            WHERE normalized_text IS NULL
+        """)
+        await cursor.execute("""
+            UPDATE products
+            SET normalizer_version = 'v1'
+            WHERE normalizer_version IS NULL OR normalizer_version = ''
         """)
         
         # Audit log table
@@ -34,6 +64,7 @@ async def init_database() -> None:
         
         # Indexes for better performance
         await cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at)")
+        await cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_normalized_text ON products(normalized_text)")
         await cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id)")
         
         logger.info("Jack Stock Bot database initialized with indexes")

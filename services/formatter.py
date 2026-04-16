@@ -8,35 +8,50 @@ class MessageFormatter:
     @staticmethod
     def _safe(value: Any) -> str:
         return escape(str(value)) if value is not None else "-"
+
+    @staticmethod
+    def _display_text(row: Dict[str, Any]) -> str:
+        return row.get("normalized_text") or row.get("raw_text") or ""
     
     @staticmethod
     def format_product_short(row: Dict[str, Any]) -> str:
         product_id = MessageFormatter._safe(row.get("id", "N/A"))
-        raw_preview = MessageFormatter._safe((row.get("raw_text") or "")[:100])
-        return f"🔹 <code>#{product_id}</code> | <code>{raw_preview}</code>"
+        text_preview = MessageFormatter._safe(MessageFormatter._display_text(row)[:90])
+        suffix = "..." if len(MessageFormatter._display_text(row)) > 90 else ""
+        return f"🔹 <code>#{product_id}</code> | <code>{text_preview}</code>{suffix}"
     
     @staticmethod
     def format_product_detail(row: Dict[str, Any]) -> str:
         return (
             f"🆔 <b>ID:</b> <code>{MessageFormatter._safe(row.get('id', 'N/A'))}</code>\n"
-            f"📋 <b>Raw:</b> <code>{MessageFormatter._safe(row.get('raw_text', ''))}</code>\n"
+            f"📋 <b>Text:</b> <code>{MessageFormatter._safe(MessageFormatter._display_text(row))}</code>\n"
+            f"🧩 <b>Normalizer:</b> <code>{MessageFormatter._safe(row.get('normalizer_version', 'N/A'))}</code>\n"
             f"🕐 <b>Created:</b> {MessageFormatter._safe(row.get('created_at', 'N/A'))}\n"
             f"🔄 <b>Updated:</b> {MessageFormatter._safe(row.get('updated_at', 'N/A'))}"
         )
     
     @staticmethod
-    def format_product_list(rows: List[Dict[str, Any]], title: str, 
-                           total: Optional[int] = None) -> str:
+    def format_product_list(
+        rows: List[Dict[str, Any]],
+        title: str,
+        total: Optional[int] = None,
+        page: Optional[int] = None,
+        total_pages: Optional[int] = None,
+    ) -> str:
         if not rows:
             return "📭 Hiện chưa có sản phẩm nào."
         
         lines = [f"<b>{escape(title)}</b>", ""]
         for row in rows:
             product_id = MessageFormatter._safe(row.get("id", "N/A"))
-            raw_preview = MessageFormatter._safe((row.get("raw_text") or "")[:120])
-            lines.append(f"• <code>#{product_id}</code> | <code>{raw_preview}</code>")
+            display_text = MessageFormatter._display_text(row)
+            text_preview = MessageFormatter._safe(display_text[:80])
+            suffix = "..." if len(display_text) > 80 else ""
+            lines.append(f"• <code>#{product_id}</code> | <code>{text_preview}</code>{suffix}")
 
         if total is not None:
+            if page is not None and total_pages is not None:
+                lines.append(f"🧭 Trang: <b>{page}/{total_pages}</b>")
             lines.append(f"📦 Tổng trong hệ thống: <b>{total}</b>")
             lines.append(f"📄 Hiển thị: <b>{len(rows)}</b>")
 

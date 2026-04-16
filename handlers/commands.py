@@ -12,6 +12,7 @@ from database.repositories import product_repo
 from database.models import backup_database
 from services.formatter import formatter
 from services.exporter import exporter
+from services.normalizer import normalizer
 from utils.logger import logger
 
 router = Router()
@@ -52,7 +53,8 @@ async def cmd_help(message: Message):
     await message.answer(
         "📖 <b>Danh sách lệnh chi tiết:</b>\n\n"
         "📋 <b>/list</b> — Xem toàn bộ sản phẩm\n"
-        "📋 <b>/list 10</b> — Xem 10 sản phẩm gần nhất\n\n"
+        "📋 <b>/list 10</b> — Xem 10 sản phẩm/trang\n"
+        "📋 <b>/list 10 2</b> — Xem trang 2\n\n"
         "🔍 <b>/find &lt;từ khóa&gt;</b> — Tìm kiếm sản phẩm\n\n"
         "➕ <b>/add</b> — Thêm sản phẩm mới (có xác nhận)\n\n"
         "✏️ <b>/edit</b> — Sửa sản phẩm theo ID\n\n"
@@ -74,28 +76,47 @@ async def cmd_cancel(message: Message, state: FSMContext):
 @router.message(Command("list"), IsAdmin())
 async def cmd_list(message: Message, command: CommandObject):
     max_limit = 500
-    try:
-        limit = int(command.args) if command.args else None
-    except ValueError:
-        await message.answer("⚠️ Số lượng không hợp lệ. Dùng: /list [số]")
+    default_limit = 20
+    parts = (command.args or "").split()
+    if len(parts) > 2:
+        await message.answer("⚠️ Dùng: /list [limit] [page]")
         return
 
-    if limit is not None and limit <= 0:
-        await message.answer("⚠️ Số lượng phải là số nguyên dương. Dùng: /list [số]")
+    try:
+        limit = int(parts[0]) if len(parts) >= 1 else default_limit
+        page = int(parts[1]) if len(parts) == 2 else 1
+    except ValueError:
+        await message.answer("⚠️ Tham số không hợp lệ. Dùng: /list [limit] [page]")
         return
-    if limit is not None and limit > max_limit:
-        await message.answer(f"⚠️ Tối đa {max_limit} sản phẩm mỗi lần. Dùng: /list [số <= {max_limit}]")
+
+    if limit <= 0 or page <= 0:
+        await message.answer("⚠️ Limit và page phải là số nguyên dương.")
         return
-    
+    if limit > max_limit:
+        await message.answer(f"⚠️ Tối đa {max_limit} sản phẩm mỗi trang.")
+        return
+
     total = await product_repo.count()
-    rows = await product_repo.get_all(limit=limit or 50)
-    
+    if total == 0:
+        await message.answer("📭 Hiện chưa có sản phẩm nào.")
+        return
+
+    total_pages = (total + limit - 1) // limit
+    if page > total_pages:
+        await message.answer(f"⚠️ Trang không hợp lệ. Tổng số trang hiện tại: {total_pages}")
+        return
+
+    offset = (page - 1) * limit
+    rows = await product_repo.get_all(limit=limit, offset=offset)
+
     text = formatter.format_product_list(
-        rows, 
+        rows,
         "📋 Danh sách sản phẩm",
-        total=total
+        total=total,
+        page=page,
+        total_pages=total_pages,
     )
-    
+
     await _send_chunked_message(message, text)
 
 
@@ -205,7 +226,7 @@ async def add_products_handler(message: Message, state: FSMContext):
         await message.answer("⚠️ Nội dung trống. Vui lòng gửi lại.")
         return
     
-    # Chỉ tách dòng và lưu raw text theo từng dòng (không parse field)
+    # Tách dòng và chuẩn hóa từng dòng trước khi preview/lưu.
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     if not lines:
         await message.answer("⚠️ Không có dòng hợp lệ để thêm.")
@@ -221,9 +242,18 @@ async def add_products_handler(message: Message, state: FSMContext):
             f"({MAX_RAW_LINE_LENGTH} ký tự). Dòng lỗi: {', '.join(map(str, too_long[:10]))}"
         )
         return
+
+    normalized_lines = [normalizer.normalize(line) for line in lines]
+    empty_after_normalize = [i for i, line in enumerate(normalized_lines, 1) if not line]
+    if empty_after_normalize:
+        await message.answer(
+            "⚠️ Có dòng rỗng sau chuẩn hóa. Dòng lỗi: "
+            f"{', '.join(map(str, empty_after_normalize[:10]))}"
+        )
+        return
     
     # Lưu vào state
-    await state.update_data(pending_products=lines)
+    await state.update_data(pending_products=normalized_lines)
     await state.set_state(AddProductState.confirm)
     
     # Hiển thị preview
@@ -231,9 +261,9 @@ async def add_products_handler(message: Message, state: FSMContext):
         "📋 <b>Preview sản phẩm sẽ thêm:</b>",
         ""
     ]
-    for i, raw in enumerate(lines, 1):
-        suffix = "..." if len(raw) > 80 else ""
-        preview_lines.append(f"{i}. <code>{escape(raw[:80])}</code>{suffix}")
+    for i, normalized in enumerate(normalized_lines, 1):
+        suffix = "..." if len(normalized) > 80 else ""
+        preview_lines.append(f"{i}. <code>{escape(normalized[:80])}</code>{suffix}")
     
     preview_lines.extend([
         "",
@@ -255,8 +285,12 @@ async def add_confirm_handler(message: Message, state: FSMContext):
     pending_lines = data.get("pending_products", [])
     
     count = 0
-    for raw in pending_lines:
-        product_id = await product_repo.create(raw, message.from_user.id)
+    for normalized_text in pending_lines:
+        product_id = await product_repo.create(
+            normalized_text,
+            message.from_user.id,
+            normalizer_version=normalizer.VERSION,
+        )
         if product_id:
             count += 1
     
@@ -311,17 +345,22 @@ async def edit_new_line(message: Message, state: FSMContext):
     if not new_line:
         await message.answer("⚠️ Dòng mới không được để trống.")
         return
+
+    normalized_line = normalizer.normalize(new_line)
+    if not normalized_line:
+        await message.answer("⚠️ Dòng mới rỗng sau chuẩn hóa. Vui lòng nhập lại.")
+        return
     
     data = await state.get_data()
     product_id = data["product_id"]
 
-    await state.update_data(new_line=new_line)
+    await state.update_data(new_line=normalized_line)
     await state.set_state(EditProductState.confirm)
     
     await message.answer(
         formatter.format_confirmation(
             "sửa",
-            f"ID: {product_id}\nMới: {new_line[:100]}..."
+            f"ID: {product_id}\nMới: {normalized_line[:100]}..."
         ),
         parse_mode="HTML"
     )
@@ -339,7 +378,13 @@ async def edit_confirm_handler(message: Message, state: FSMContext):
     new_line = data["new_line"]
     old_data = data["old_data"]
     
-    success = await product_repo.update(product_id, new_line, message.from_user.id, old_data)
+    success = await product_repo.update(
+        product_id,
+        new_line,
+        message.from_user.id,
+        old_data,
+        normalizer_version=normalizer.VERSION,
+    )
     await state.clear()
     
     if success:
@@ -422,8 +467,10 @@ async def delete_choose_ids(message: Message, state: FSMContext):
         ""
     ]
     for product in products_to_delete:
+        display_text = product.get("normalized_text") or ""
         preview_lines.append(
-            f"• <code>#{product['id']}</code> <code>{escape(product['raw_text'][:60])}</code>..."
+            f"• <code>#{product['id']}</code> <code>{escape(display_text[:60])}</code>"
+            f"{'...' if len(display_text) > 60 else ''}"
         )
 
     if invalid_parts:
