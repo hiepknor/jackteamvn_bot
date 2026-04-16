@@ -42,6 +42,7 @@ async def cmd_start(message: Message, state: FSMContext):
         f"🗑️ /delete — Xóa sản phẩm theo ID\n"
         f"📤 /export — Xuất file TXT và CSV\n"
         f"📊 /stats — Xem thống kê chi tiết\n"
+        f"🧹 /normalize — Chuẩn hóa toàn bộ dữ liệu\n"
         f"💾 /backup — Sao lưu database\n"
         f"❌ /cancel — Hủy thao tác",
         parse_mode="HTML"
@@ -61,6 +62,7 @@ async def cmd_help(message: Message):
         "🗑️ <b>/delete</b> — Xóa sản phẩm theo ID(s)\n\n"
         "📤 <b>/export</b> — Xuất file TXT & CSV\n\n"
         "📊 <b>/stats</b> — Xem thống kê hệ thống\n\n"
+        "🧹 <b>/normalize</b> — Chuẩn hóa toàn bộ dữ liệu hiện có\n\n"
         "💾 <b>/backup</b> — Sao lưu database\n\n"
         "❌ <b>/cancel</b> — Hủy thao tác hiện tại",
         parse_mode="HTML"
@@ -179,6 +181,68 @@ async def cmd_export(message: Message):
 async def cmd_stats(message: Message):
     stats = await product_repo.get_stats()
     await message.answer(formatter.format_stats(stats), parse_mode="HTML")
+
+
+@router.message(Command("normalize"), IsAdmin())
+async def cmd_normalize(message: Message):
+    total = await product_repo.count()
+    if total == 0:
+        await message.answer("📭 Hiện chưa có sản phẩm nào để chuẩn hóa.")
+        return
+
+    wait_msg = await message.answer(f"⏳ Đang chuẩn hóa {total} sản phẩm...")
+    updated = 0
+    skipped = 0
+    failed = 0
+    batch_size = 200
+    offset = 0
+
+    try:
+        while True:
+            rows = await product_repo.get_all(limit=batch_size, offset=offset)
+            if not rows:
+                break
+
+            for row in rows:
+                product_id = row["id"]
+                old_text = (row.get("normalized_text") or "").strip()
+                old_version = row.get("normalizer_version") or ""
+                new_text = normalizer.normalize(old_text)
+
+                if new_text == old_text and old_version == normalizer.VERSION:
+                    skipped += 1
+                    continue
+
+                success = await product_repo.update(
+                    product_id,
+                    new_text,
+                    message.from_user.id,
+                    row,
+                    normalizer_version=normalizer.VERSION,
+                )
+                if success:
+                    updated += 1
+                else:
+                    failed += 1
+
+            offset += batch_size
+
+        await message.answer(
+            "✅ <b>Chuẩn hóa hoàn tất</b>\n\n"
+            f"🔁 Cập nhật: <b>{updated}</b>\n"
+            f"⏭️ Bỏ qua: <b>{skipped}</b>\n"
+            f"⚠️ Lỗi: <b>{failed}</b>\n"
+            f"🧩 Phiên bản chuẩn hóa: <code>{normalizer.VERSION}</code>",
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logger.error("Normalize command failed: %s", exc, exc_info=exc)
+        await message.answer(f"❌ Lỗi khi chuẩn hóa dữ liệu: {escape(str(exc))}", parse_mode="HTML")
+    finally:
+        try:
+            await wait_msg.delete()
+        except Exception:
+            pass
 
 
 @router.message(Command("backup"), IsAdmin())

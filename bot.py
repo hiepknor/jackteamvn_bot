@@ -51,6 +51,7 @@ async def setup_bot_commands(bot: Bot):
             BotCommand(command="delete", description="🗑️ Xóa theo ID"),
             BotCommand(command="export", description="📤 Xuất TXT/CSV"),
             BotCommand(command="stats", description="📊 Thống kê"),
+            BotCommand(command="normalize", description="🧹 Chuẩn hóa toàn bộ DB"),
             BotCommand(command="backup", description="💾 Sao lưu DB"),
             BotCommand(command="cancel", description="❌ Hủy thao tác"),
         ]

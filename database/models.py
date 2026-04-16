@@ -13,7 +13,7 @@ async def init_database() -> None:
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 normalized_text TEXT NOT NULL,
-                normalizer_version TEXT NOT NULL DEFAULT 'v1',
+                normalizer_version TEXT NOT NULL DEFAULT 'v2',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
@@ -27,7 +27,7 @@ async def init_database() -> None:
             logger.info("Added products.normalized_text column")
 
         if "normalizer_version" not in product_columns:
-            await cursor.execute("ALTER TABLE products ADD COLUMN normalizer_version TEXT DEFAULT 'v1'")
+            await cursor.execute("ALTER TABLE products ADD COLUMN normalizer_version TEXT DEFAULT 'v2'")
             logger.info("Added products.normalizer_version column")
 
         if "raw_text" in product_columns:
@@ -44,7 +44,7 @@ async def init_database() -> None:
         """)
         await cursor.execute("""
             UPDATE products
-            SET normalizer_version = 'v1'
+            SET normalizer_version = 'v2'
             WHERE normalizer_version IS NULL OR normalizer_version = ''
         """)
         

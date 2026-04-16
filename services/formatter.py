@@ -4,6 +4,8 @@ from html import escape
 
 class MessageFormatter:
     """Message formatter for Jack Stock Bot"""
+    LIST_PREVIEW_LEN = 68
+    SHORT_PREVIEW_LEN = 80
 
     @staticmethod
     def _safe(value: Any) -> str:
@@ -16,8 +18,14 @@ class MessageFormatter:
     @staticmethod
     def format_product_short(row: Dict[str, Any]) -> str:
         product_id = MessageFormatter._safe(row.get("id", "N/A"))
-        text_preview = MessageFormatter._safe(MessageFormatter._display_text(row)[:90])
-        suffix = "..." if len(MessageFormatter._display_text(row)) > 90 else ""
+        text_preview = MessageFormatter._safe(
+            MessageFormatter._display_text(row)[:MessageFormatter.SHORT_PREVIEW_LEN]
+        )
+        suffix = (
+            "..."
+            if len(MessageFormatter._display_text(row)) > MessageFormatter.SHORT_PREVIEW_LEN
+            else ""
+        )
         return f"🔹 <code>#{product_id}</code> | <code>{text_preview}</code>{suffix}"
     
     @staticmethod
@@ -45,8 +53,8 @@ class MessageFormatter:
         for row in rows:
             product_id = MessageFormatter._safe(row.get("id", "N/A"))
             display_text = MessageFormatter._display_text(row)
-            text_preview = MessageFormatter._safe(display_text[:80])
-            suffix = "..." if len(display_text) > 80 else ""
+            text_preview = MessageFormatter._safe(display_text[:MessageFormatter.LIST_PREVIEW_LEN])
+            suffix = "..." if len(display_text) > MessageFormatter.LIST_PREVIEW_LEN else ""
             lines.append(f"• <code>#{product_id}</code> | <code>{text_preview}</code>{suffix}")
 
         if total is not None:
