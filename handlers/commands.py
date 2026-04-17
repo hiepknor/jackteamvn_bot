@@ -69,7 +69,7 @@ async def cmd_help(message: Message):
     )
 
 
-@router.message(Command("cancel"))
+@router.message(Command("cancel"), IsAdmin())
 async def cmd_cancel(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("❌ Đã hủy thao tác.", parse_mode="HTML")
@@ -370,17 +370,18 @@ async def add_confirm_handler(message: Message, state: FSMContext):
     
     data = await state.get_data()
     pending_lines = data.get("pending_products", [])
-    
-    count = 0
-    for normalized_text in pending_lines:
-        product_id = await product_repo.create(
-            normalized_text,
+    try:
+        count = await product_repo.create_batch(
+            pending_lines,
             message.from_user.id,
             normalizer_version=normalizer.VERSION,
         )
-        if product_id:
-            count += 1
-    
+    except Exception as exc:
+        logger.error("Add products failed: %s", exc, exc_info=exc)
+        await state.clear()
+        await message.answer("❌ Lỗi khi thêm sản phẩm. Không có dữ liệu nào được lưu.")
+        return
+
     await state.clear()
     await message.answer(f"✅ Đã thêm <b>{count}</b> sản phẩm thành công!", parse_mode="HTML")
 
@@ -685,4 +686,11 @@ async def _answer_html_with_fallback(message: Message, text: str) -> None:
 async def error_handler(event):
     exception = getattr(event, "exception", None)
     logger.error("Error in handler: %s", exception, exc_info=exception)
+    update = getattr(event, "update", None)
+    message = getattr(update, "message", None)
+    if message:
+        try:
+            await message.answer("❌ Có lỗi xảy ra khi xử lý lệnh. Vui lòng thử lại hoặc dùng /cancel.")
+        except Exception:
+            pass
     return True

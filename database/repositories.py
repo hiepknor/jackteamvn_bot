@@ -31,6 +31,35 @@ class ProductRepository:
             
             logger.info(f"Product created: ID={product_id}")
             return product_id
+
+    @staticmethod
+    async def create_batch(
+        normalized_texts: List[str],
+        user_id: int,
+        normalizer_version: str = "v2",
+    ) -> int:
+        if not normalized_texts:
+            return 0
+
+        created_count = 0
+        async with db.get_cursor() as cursor:
+            for normalized_text in normalized_texts:
+                await cursor.execute(
+                    "INSERT INTO products (normalized_text, normalizer_version) VALUES (?, ?)",
+                    (normalized_text, normalizer_version),
+                )
+                product_id = cursor.lastrowid
+                await cursor.execute(
+                    """
+                    INSERT INTO audit_log (user_id, action, entity_type, entity_id, new_value)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (user_id, "CREATE", "product", product_id, normalized_text),
+                )
+                created_count += 1
+
+        logger.info("Batch created %s products", created_count)
+        return created_count
     
     @staticmethod
     async def get_by_id(product_id: int) -> Optional[Dict[str, Any]]:

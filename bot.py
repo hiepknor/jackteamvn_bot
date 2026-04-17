@@ -67,6 +67,11 @@ async def main():
         logger.error("BOT_TOKEN is missing in .env file!")
         raise ValueError("BOT_TOKEN is required")
 
+    invalid_admin_ids = settings.invalid_admin_id_tokens
+    if invalid_admin_ids:
+        logger.error("Invalid ADMIN_IDS tokens: %s", invalid_admin_ids)
+        raise ValueError("ADMIN_IDS contains invalid values. Use comma-separated numeric Telegram IDs.")
+
     if settings.admin_id_list:
         logger.info(f"Admin-only mode enabled. Admin IDs: {settings.admin_id_list}")
     else:

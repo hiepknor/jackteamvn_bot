@@ -38,6 +38,16 @@ class Settings(BaseSettings):
     def admin_id_list(self) -> List[int]:
         """Convert ADMIN_IDS string to list of integers"""
         return [int(x.strip()) for x in self.ADMIN_IDS.split(",") if x.strip().isdigit()]
+
+    @property
+    def admin_id_tokens(self) -> List[str]:
+        """Raw ADMIN_IDS tokens without empty values."""
+        return [x.strip() for x in self.ADMIN_IDS.split(",") if x.strip()]
+
+    @property
+    def invalid_admin_id_tokens(self) -> List[str]:
+        """Return invalid ADMIN_IDS tokens (non-numeric)."""
+        return [x for x in self.admin_id_tokens if not x.isdigit()]
     
     @property
     def base_dir(self) -> Path:
