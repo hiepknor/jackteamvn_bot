@@ -8,6 +8,9 @@ class IsAdmin(BaseFilter):
     """Filter to check if user is admin for Jack Stock Bot"""
     
     async def __call__(self, message: Message) -> bool:
+        if not settings.admin_id_list:
+            return True
+
         if not message.from_user:
             logger.warning("Unauthorized access attempt without from_user")
             return False

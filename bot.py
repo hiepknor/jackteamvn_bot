@@ -67,11 +67,10 @@ async def main():
         logger.error("BOT_TOKEN is missing in .env file!")
         raise ValueError("BOT_TOKEN is required")
 
-    if not settings.admin_id_list:
-        logger.error("ADMIN_IDS is missing or invalid in .env file!")
-        raise ValueError("ADMIN_IDS is required")
-
-    logger.info(f"Admin IDs: {settings.admin_id_list}")
+    if settings.admin_id_list:
+        logger.info(f"Admin-only mode enabled. Admin IDs: {settings.admin_id_list}")
+    else:
+        logger.info("Open mode enabled. ADMIN_IDS is empty, all users are allowed.")
     logger.info(f"Database: {settings.db_path}")
     logger.info(f"Export Dir: {settings.export_dir}")
 

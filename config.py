@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     BOT_NAME: str = Field("JackStockBot", description="Bot Name")
     
     # Admin
-    ADMIN_IDS: str = Field(..., description="Comma-separated admin Telegram IDs")
+    ADMIN_IDS: str = Field("", description="Comma-separated admin Telegram IDs")
     
     # Database
     DB_NAME: str = Field("jackteamvn.db", description="SQLite Database Name")
