@@ -12,8 +12,23 @@ services:
       - .env
     environment:
       - TZ=Asia/Ho_Chi_Minh
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "print('OK')"]
+      test: ["CMD", "python", "-m", "utils.healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    container_name: jackteamvn_redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
