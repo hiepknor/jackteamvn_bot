@@ -6,14 +6,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gosu \
+    && pip install --no-cache-dir -r /app/requirements.txt \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . /app
 
-RUN addgroup --system bot && adduser --system --ingroup bot bot \
+RUN addgroup --system bot \
+    && adduser --system --ingroup bot bot \
     && mkdir -p /app/data /app/logs /app/exports /app/storage \
-    && chown -R bot:bot /app
+    && chmod +x /app/docker/entrypoint.sh
 
-USER bot
-
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["python", "bot.py"]
