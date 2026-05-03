@@ -114,7 +114,18 @@ async def backup_database() -> str:
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = _backup_dir() / f"jackteamvn_backup_{timestamp}.db"
-    shutil.copy2(settings.db_path, backup_path)
+
+    # Use SQLite backup API for a transactionally consistent snapshot.
+    source_conn = sqlite3.connect(str(settings.db_path))
+    try:
+        dest_conn = sqlite3.connect(str(backup_path))
+        try:
+            source_conn.backup(dest_conn)
+        finally:
+            dest_conn.close()
+    finally:
+        source_conn.close()
+
     _cleanup_old_backups()
     logger.info("Database backup created: %s", backup_path)
     return str(backup_path)

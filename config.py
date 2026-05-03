@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List
 
 from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -44,9 +44,7 @@ class Settings(BaseSettings):
     # Misc
     RATE_LIMIT_PER_MINUTE: int = Field(60, description="Rate limit per minute")
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
     @field_validator("BOT_TOKEN")
     @classmethod

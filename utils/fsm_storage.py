@@ -15,7 +15,7 @@ from utils.logger import logger
 async def create_fsm_storage() -> Tuple[BaseStorage, str]:
     """Create FSM storage from settings with safe fallback."""
     preferred = settings.FSM_BACKEND.lower()
-    should_try_redis = preferred == "redis" or bool((settings.REDIS_URL or "").strip())
+    should_try_redis = preferred == "redis"
 
     if should_try_redis:
         try:
