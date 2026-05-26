@@ -24,6 +24,3 @@ class IsAllowedUser(BaseFilter):
             parse_mode="HTML",
         )
         return False
-
-
-IsAdmin = IsAllowedUser

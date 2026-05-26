@@ -8,14 +8,14 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from database.repositories import product_repo
-from handlers.filters import IsAdmin
+from handlers.filters import IsAllowedUser
 from handlers.states import FindProductState
 from services.formatter import formatter
 from .shared import send_chunked_message
 
 
 def register(router: Router) -> None:
-    @router.message(Command("start"), IsAdmin())
+    @router.message(Command("start"), IsAllowedUser())
     async def cmd_start(message: Message, state: FSMContext):
         await state.clear()
         stats = await product_repo.get_stats()
@@ -36,7 +36,7 @@ def register(router: Router) -> None:
             parse_mode="HTML",
         )
 
-    @router.message(Command("help"), IsAdmin())
+    @router.message(Command("help"), IsAllowedUser())
     async def cmd_help(message: Message):
         await message.answer(
             "📖 <b>Hướng dẫn sử dụng bot nội bộ</b>\n\n"
@@ -57,12 +57,12 @@ def register(router: Router) -> None:
             parse_mode="HTML",
         )
 
-    @router.message(Command("cancel"), StateFilter("*"), IsAdmin())
+    @router.message(Command("cancel"), StateFilter("*"), IsAllowedUser())
     async def cmd_cancel(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("❌ Đã hủy thao tác hiện tại.", parse_mode="HTML")
 
-    @router.message(Command("list"), IsAdmin())
+    @router.message(Command("list"), IsAllowedUser())
     async def cmd_list(message: Message, command: CommandObject):
         max_limit = 500
         default_limit = 20
@@ -125,7 +125,7 @@ def register(router: Router) -> None:
         text = formatter.format_search_results(query, rows)
         await send_chunked_message(message, text)
 
-    @router.message(Command("find"), IsAdmin())
+    @router.message(Command("find"), IsAllowedUser())
     async def cmd_find(message: Message, command: CommandObject, state: FSMContext):
         query = (command.args or "").strip()
         if not query:
@@ -140,7 +140,7 @@ def register(router: Router) -> None:
         await state.clear()
         await _perform_find(message, query)
 
-    @router.message(FindProductState.awaiting_query, IsAdmin())
+    @router.message(FindProductState.awaiting_query, IsAllowedUser())
     async def find_query_handler(message: Message, state: FSMContext):
         query = (message.text or "").strip()
         if not query:
@@ -150,7 +150,7 @@ def register(router: Router) -> None:
         await state.clear()
         await _perform_find(message, query)
 
-    @router.message(Command("stats"), IsAdmin())
+    @router.message(Command("stats"), IsAllowedUser())
     async def cmd_stats(message: Message):
         stats = await product_repo.get_stats()
         await message.answer(formatter.format_stats(stats), parse_mode="HTML")

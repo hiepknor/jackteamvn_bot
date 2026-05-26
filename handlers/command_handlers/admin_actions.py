@@ -8,7 +8,7 @@ from aiogram.types import FSInputFile, Message
 
 from database.models import backup_database
 from database.repositories import product_repo
-from handlers.filters import IsAdmin
+from handlers.filters import IsAllowedUser
 from services.exporter import exporter
 from services.normalizer import normalizer
 from utils.logger import logger
@@ -16,7 +16,7 @@ from .shared import actor_tag, ensure_admin
 
 
 def register(router: Router) -> None:
-    @router.message(Command("export"), IsAdmin())
+    @router.message(Command("export"), IsAllowedUser())
     async def cmd_export(message: Message):
         if not await ensure_admin(message):
             return
@@ -50,7 +50,7 @@ def register(router: Router) -> None:
             except Exception:
                 pass
 
-    @router.message(Command("normalize"), IsAdmin())
+    @router.message(Command("normalize"), IsAllowedUser())
     async def cmd_normalize(message: Message):
         if not await ensure_admin(message):
             return
@@ -122,7 +122,7 @@ def register(router: Router) -> None:
             except Exception:
                 pass
 
-    @router.message(Command("backup"), IsAdmin())
+    @router.message(Command("backup"), IsAllowedUser())
     async def cmd_backup(message: Message):
         if not await ensure_admin(message):
             return

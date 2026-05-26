@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from database.repositories import product_repo
-from handlers.filters import IsAdmin
+from handlers.filters import IsAllowedUser
 from handlers.states import AddProductState, DeleteProductState, EditProductState
 from services.formatter import formatter
 from services.normalizer import normalizer
@@ -25,7 +25,7 @@ from .shared import (
 
 
 def register(router: Router) -> None:
-    @router.message(Command("add"), IsAdmin())
+    @router.message(Command("add"), IsAllowedUser())
     async def cmd_add(message: Message, state: FSMContext):
         if not await ensure_admin(message):
             return
@@ -41,7 +41,7 @@ def register(router: Router) -> None:
             parse_mode="HTML",
         )
 
-    @router.message(AddProductState.raw_lines, IsAdmin())
+    @router.message(AddProductState.raw_lines, IsAllowedUser())
     async def add_products_handler(message: Message, state: FSMContext):
         if not await ensure_admin(message):
             await state.clear()
@@ -119,7 +119,7 @@ def register(router: Router) -> None:
         preview_lines.extend(["", formatter.format_confirmation("thêm", f"{len(valid_lines)} sản phẩm")])
         await send_chunked_message(message, "\n".join(preview_lines))
 
-    @router.message(AddProductState.confirm, IsAdmin())
+    @router.message(AddProductState.confirm, IsAllowedUser())
     async def add_confirm_handler(message: Message, state: FSMContext):
         if not await ensure_admin(message):
             await state.clear()
@@ -160,7 +160,7 @@ def register(router: Router) -> None:
             parse_mode="HTML",
         )
 
-    @router.message(Command("edit"), IsAdmin())
+    @router.message(Command("edit"), IsAllowedUser())
     async def cmd_edit(message: Message, state: FSMContext):
         if not await ensure_admin(message):
             return
@@ -174,7 +174,7 @@ def register(router: Router) -> None:
 
         await send_chunked_message(message, text + "\n\n✏️ <b>Nhập ID sản phẩm cần sửa:</b>")
 
-    @router.message(EditProductState.product_id, IsAdmin())
+    @router.message(EditProductState.product_id, IsAllowedUser())
     async def edit_choose_id(message: Message, state: FSMContext):
         if not await ensure_admin(message):
             await state.clear()
@@ -202,7 +202,7 @@ def register(router: Router) -> None:
             parse_mode="HTML",
         )
 
-    @router.message(EditProductState.new_raw_line, IsAdmin())
+    @router.message(EditProductState.new_raw_line, IsAllowedUser())
     async def edit_new_line(message: Message, state: FSMContext):
         if not await ensure_admin(message):
             await state.clear()
@@ -239,7 +239,7 @@ def register(router: Router) -> None:
             parse_mode="HTML",
         )
 
-    @router.message(EditProductState.confirm, IsAdmin())
+    @router.message(EditProductState.confirm, IsAllowedUser())
     async def edit_confirm_handler(message: Message, state: FSMContext):
         if not await ensure_admin(message):
             await state.clear()
@@ -359,7 +359,7 @@ def register(router: Router) -> None:
 
         await send_chunked_message(message, "\n".join(preview_lines))
 
-    @router.message(Command("delete"), IsAdmin())
+    @router.message(Command("delete"), IsAllowedUser())
     async def cmd_delete(message: Message, state: FSMContext, command: CommandObject):
         if not await ensure_admin(message):
             return
@@ -381,14 +381,14 @@ def register(router: Router) -> None:
             text + "\n\n🗑️ <b>Nhập 1 hoặc nhiều ID cần xóa:</b>\nVí dụ: <code>1,2,3,5</code>",
         )
 
-    @router.message(DeleteProductState.product_ids, IsAdmin())
+    @router.message(DeleteProductState.product_ids, IsAllowedUser())
     async def delete_choose_ids(message: Message, state: FSMContext):
         if not await ensure_admin(message):
             await state.clear()
             return
         await _handle_delete_ids_input(message, state, message.text or "")
 
-    @router.message(DeleteProductState.confirm, IsAdmin())
+    @router.message(DeleteProductState.confirm, IsAllowedUser())
     async def delete_confirm_handler(message: Message, state: FSMContext):
         if not await ensure_admin(message):
             await state.clear()

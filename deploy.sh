@@ -107,7 +107,8 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 0
 fi
 
-if grep -q "TELEGRAM_BOT_TOKEN=your_bot_token_here" "$ENV_FILE" || ! grep -q '^TELEGRAM_BOT_TOKEN=' "$ENV_FILE"; then
+if ! grep -Eq '^TELEGRAM_BOT_TOKEN=.+$' "$ENV_FILE" \
+  || grep -q '^TELEGRAM_BOT_TOKEN=your_bot_token_here$' "$ENV_FILE"; then
   echo
   echo "TELEGRAM_BOT_TOKEN trong $ENV_FILE chưa được cấu hình đúng."
   echo "Hãy mở file ra sửa rồi chạy lại:"
