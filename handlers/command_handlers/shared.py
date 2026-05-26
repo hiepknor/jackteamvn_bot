@@ -20,7 +20,7 @@ def actor_tag(message: Message) -> str:
     return f"user_id={user.id} username={username}"
 
 
-async def ensure_admin(message: Message) -> bool:
+async def ensure_allowed_user(message: Message) -> bool:
     """Enforce TELEGRAM_ALLOWED_USER_IDS for write operations when configured."""
     user = message.from_user
     if not user:
@@ -35,7 +35,7 @@ async def ensure_admin(message: Message) -> bool:
     return True
 
 
-async def ensure_admin_callback(callback: CallbackQuery) -> bool:
+async def ensure_allowed_user_callback(callback: CallbackQuery) -> bool:
     user = callback.from_user
     if not user:
         if callback.message:

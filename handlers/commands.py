@@ -1,12 +1,12 @@
 from aiogram import Router
 
-from handlers.command_handlers import admin_actions, general, product_flows
+from handlers.command_handlers import data_actions, general, product_flows
 from utils.logger import logger
 
 router = Router()
 
 general.register(router)
-admin_actions.register(router)
+data_actions.register(router)
 product_flows.register(router)
 
 

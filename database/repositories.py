@@ -1,4 +1,7 @@
-from typing import Optional, List, Tuple, Dict, Any
+from __future__ import annotations
+
+from typing import Any, Optional
+
 from database.connection import db
 from services.normalizer import normalizer
 from utils.logger import logger
@@ -6,14 +9,14 @@ from utils.logger import logger
 
 class ProductRepository:
     """Repository for Jack Stock Bot product operations"""
-    
+
     @staticmethod
     async def count() -> int:
         async with db.get_cursor() as cursor:
             await cursor.execute("SELECT COUNT(*) AS total FROM products")
             row = await cursor.fetchone()
             return int(row["total"]) if row else 0
-    
+
     @staticmethod
     async def create(normalized_text: str, user_id: int, normalizer_version: str = "v2") -> Optional[int]:
         async with db.get_cursor() as cursor:
@@ -28,13 +31,13 @@ class ProductRepository:
                 INSERT INTO audit_log (user_id, action, entity_type, entity_id, new_value)
                 VALUES (?, ?, ?, ?, ?)
             """, (user_id, "CREATE", "product", product_id, normalized_text))
-            
-            logger.info(f"Product created: ID={product_id}")
+
+            logger.info("Product created: ID=%s", product_id)
             return product_id
 
     @staticmethod
     async def create_batch(
-        normalized_texts: List[str],
+        normalized_texts: list[str],
         user_id: int,
         normalizer_version: str = "v2",
     ) -> int:
@@ -62,7 +65,7 @@ class ProductRepository:
         return created_count
     
     @staticmethod
-    async def get_by_id(product_id: int) -> Optional[Dict[str, Any]]:
+    async def get_by_id(product_id: int) -> dict[str, Any] | None:
         async with db.get_cursor() as cursor:
             await cursor.execute(
                 """
@@ -76,14 +79,14 @@ class ProductRepository:
             return dict(row) if row else None
     
     @staticmethod
-    async def get_all(limit: Optional[int] = None, offset: int = 0) -> List[Dict[str, Any]]:
+    async def get_all(limit: int | None = None, offset: int = 0) -> list[dict[str, Any]]:
         async with db.get_cursor() as cursor:
             sql = """
                 SELECT id, normalized_text, normalizer_version, created_at, updated_at
                 FROM products
                 ORDER BY id DESC
             """
-            params: Tuple = ()
+            params: tuple[int, int] | tuple[()] = ()
             if limit:
                 sql += " LIMIT ? OFFSET ?"
                 params = (limit, offset)
@@ -92,7 +95,7 @@ class ProductRepository:
             return [dict(row) for row in rows]
     
     @staticmethod
-    async def search(query: str, limit: Optional[int] = 50) -> List[Dict[str, Any]]:
+    async def search(query: str, limit: int | None = 50) -> list[dict[str, Any]]:
         def _escape_like(value: str) -> str:
             return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
@@ -100,8 +103,8 @@ class ProductRepository:
         if not variants:
             return []
 
-        conditions: List[str] = []
-        params: List[str | int] = []
+        conditions: list[str] = []
+        params: list[str | int] = []
         primary = variants[0]
         escaped_primary = _escape_like(primary)
 
@@ -147,7 +150,7 @@ class ProductRepository:
         product_id: int,
         normalized_text: str,
         user_id: int,
-        old_data: Dict[str, Any],
+        old_data: dict[str, Any],
         normalizer_version: str = "v2",
     ) -> bool:
         async with db.get_cursor() as cursor:
@@ -169,12 +172,12 @@ class ProductRepository:
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (user_id, "UPDATE", "product", product_id, 
                       str(old_data), normalized_text))
-                logger.info(f"Product updated: ID={product_id}")
+                logger.info("Product updated: ID=%s", product_id)
             
             return updated
     
     @staticmethod
-    async def delete(product_id: int, user_id: int) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    async def delete(product_id: int, user_id: int) -> tuple[bool, dict[str, Any] | None]:
         product = await ProductRepository.get_by_id(product_id)
         if not product:
             return False, None
@@ -188,12 +191,12 @@ class ProductRepository:
                     INSERT INTO audit_log (user_id, action, entity_type, entity_id, old_value)
                     VALUES (?, ?, ?, ?, ?)
                 """, (user_id, "DELETE", "product", product_id, str(product)))
-                logger.info(f"Product deleted: ID={product_id}")
+                logger.info("Product deleted: ID=%s", product_id)
             
             return deleted, product
     
     @staticmethod
-    async def delete_batch(ids: List[int], user_id: int) -> Tuple[List[int], List[int]]:
+    async def delete_batch(ids: list[int], user_id: int) -> tuple[list[int], list[int]]:
         deleted_ids = []
         not_found_ids = []
         
@@ -207,14 +210,14 @@ class ProductRepository:
         return deleted_ids, not_found_ids
     
     @staticmethod
-    async def get_stats() -> Dict[str, Any]:
+    async def get_stats() -> dict[str, Any]:
         async with db.get_cursor() as cursor:
             await cursor.execute("SELECT COUNT(*) AS total FROM products")
             total = (await cursor.fetchone())["total"]
             return {"total_products": total}
     
     @staticmethod
-    async def get_audit_log(user_id: Optional[int] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    async def get_audit_log(user_id: int | None = None, limit: int = 50) -> list[dict[str, Any]]:
         async with db.get_cursor() as cursor:
             if user_id:
                 await cursor.execute("""

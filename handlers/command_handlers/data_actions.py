@@ -12,13 +12,13 @@ from handlers.filters import IsAllowedUser
 from services.exporter import exporter
 from services.normalizer import normalizer
 from utils.logger import logger
-from .shared import actor_tag, ensure_admin
+from .shared import actor_tag, ensure_allowed_user
 
 
 def register(router: Router) -> None:
     @router.message(Command("export"), IsAllowedUser())
     async def cmd_export(message: Message):
-        if not await ensure_admin(message):
+        if not await ensure_allowed_user(message):
             return
 
         total = await product_repo.count()
@@ -26,7 +26,7 @@ def register(router: Router) -> None:
             await message.answer("📭 Hiện chưa có sản phẩm nào để xuất file.")
             return
 
-        logger.info("Admin export started | %s | total=%s", actor_tag(message), total)
+        logger.info("User export started | %s | total=%s", actor_tag(message), total)
         wait_msg = await message.answer(f"⏳ Đang xuất {total} sản phẩm ra file...")
 
         try:
@@ -36,13 +36,13 @@ def register(router: Router) -> None:
             await message.answer_document(FSInputFile(txt_path), caption=f"📄 File TXT ({total} sản phẩm)")
             await message.answer_document(FSInputFile(csv_path), caption=f"📊 File CSV ({total} sản phẩm)")
             logger.info(
-                "Admin export success | %s | txt=%s | csv=%s",
+                "User export success | %s | txt=%s | csv=%s",
                 actor_tag(message),
                 txt_path,
                 csv_path,
             )
         except Exception as exc:
-            logger.error("Admin export failed | %s | err=%s", actor_tag(message), exc, exc_info=exc)
+            logger.error("User export failed | %s | err=%s", actor_tag(message), exc, exc_info=exc)
             await message.answer(f"❌ Lỗi khi xuất file: {escape(str(exc))}")
         finally:
             try:
@@ -52,7 +52,7 @@ def register(router: Router) -> None:
 
     @router.message(Command("normalize"), IsAllowedUser())
     async def cmd_normalize(message: Message):
-        if not await ensure_admin(message):
+        if not await ensure_allowed_user(message):
             return
 
         total = await product_repo.count()
@@ -60,7 +60,7 @@ def register(router: Router) -> None:
             await message.answer("📭 Hiện chưa có sản phẩm nào để chuẩn hóa.")
             return
 
-        logger.info("Admin normalize started | %s | total=%s", actor_tag(message), total)
+        logger.info("User normalize started | %s | total=%s", actor_tag(message), total)
         wait_msg = await message.answer(f"⏳ Đang chuẩn hóa {total} sản phẩm...")
         updated = 0
         skipped = 0
@@ -99,7 +99,7 @@ def register(router: Router) -> None:
                 offset += batch_size
 
             logger.info(
-                "Admin normalize completed | %s | updated=%s skipped=%s failed=%s",
+                "User normalize completed | %s | updated=%s skipped=%s failed=%s",
                 actor_tag(message),
                 updated,
                 skipped,
@@ -124,21 +124,21 @@ def register(router: Router) -> None:
 
     @router.message(Command("backup"), IsAllowedUser())
     async def cmd_backup(message: Message):
-        if not await ensure_admin(message):
+        if not await ensure_allowed_user(message):
             return
 
-        logger.info("Admin backup started | %s", actor_tag(message))
+        logger.info("User backup started | %s", actor_tag(message))
         wait_msg = await message.answer("⏳ Đang sao lưu database...")
 
         try:
             backup_path = await backup_database()
             if backup_path:
-                logger.info("Admin backup success | %s | path=%s", actor_tag(message), backup_path)
+                logger.info("User backup success | %s | path=%s", actor_tag(message), backup_path)
                 await message.answer(f"✅ Đã sao lưu: <code>{escape(backup_path)}</code>", parse_mode="HTML")
             else:
                 await message.answer("⚠️ Sao lưu đang tắt trong cấu hình.")
         except Exception as exc:
-            logger.error("Admin backup failed | %s | err=%s", actor_tag(message), exc, exc_info=exc)
+            logger.error("User backup failed | %s | err=%s", actor_tag(message), exc, exc_info=exc)
             await message.answer(f"❌ Lỗi khi sao lưu: {escape(str(exc))}")
         finally:
             try:

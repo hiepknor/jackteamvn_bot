@@ -44,7 +44,7 @@ def register(router: Router) -> None:
             "• /list [limit] [page] - Xem danh sách phân trang\n"
             "• /find &lt;từ khóa&gt; - Tìm theo mã/từ khóa\n"
             "• /stats - Xem thống kê tổng\n\n"
-            "<b>Ghi dữ liệu (admin):</b>\n"
+            "<b>Ghi dữ liệu (allowlist):</b>\n"
             "• /add - Thêm nhiều dòng, có preview + xác nhận\n"
             "• /edit - Sửa theo ID, có preview trước/sau\n"
             "• /delete &lt;id,id2,...&gt; - Xóa nhiều ID, có xác nhận\n"
