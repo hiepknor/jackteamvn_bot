@@ -240,20 +240,23 @@ class ProductRepository:
         product = await ProductRepository.get_by_id(product_id)
         if not product:
             return False, None
-        
+
+        thumbnail_path = product.get("thumbnail_path")
         async with db.get_cursor() as cursor:
             await cursor.execute("DELETE FROM products WHERE id = ?", (product_id,))
             deleted = cursor.rowcount > 0
-            
+
             if deleted:
                 await cursor.execute("""
                     INSERT INTO audit_log (user_id, action, entity_type, entity_id, old_value)
                     VALUES (?, ?, ?, ?, ?)
                 """, (user_id, "DELETE", "product", product_id, str(product)))
-                thumbnail_service.delete_thumbnail(product.get("thumbnail_path"))
                 logger.info("Product deleted: ID=%s", product_id)
-            
-            return deleted, product
+
+        if deleted:
+            thumbnail_service.delete_thumbnail(thumbnail_path)
+
+        return deleted, product
     
     @staticmethod
     async def delete_batch(ids: list[int], user_id: int) -> tuple[list[int], list[int]]:

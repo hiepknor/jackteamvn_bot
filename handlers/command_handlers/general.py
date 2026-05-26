@@ -12,6 +12,7 @@ from handlers.filters import IsAllowedUser
 from handlers.states import FindProductState
 from services.formatter import formatter
 from services.thumbnail import thumbnail_service
+from utils.logger import logger
 from .shared import send_chunked_message
 
 
@@ -133,11 +134,19 @@ def register(router: Router) -> None:
             resolved_path = thumbnail_service.resolve_path(thumbnail_path)
             if not resolved_path or not resolved_path.exists():
                 continue
-            await message.answer_photo(
-                FSInputFile(resolved_path),
-                caption=formatter.format_product_short(row),
-                parse_mode="HTML",
-            )
+            try:
+                await message.answer_photo(
+                    FSInputFile(resolved_path),
+                    caption=formatter.format_product_short(row),
+                    parse_mode="HTML",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed sending thumbnail | product_id=%s path=%s err=%s",
+                    row.get("id"),
+                    thumbnail_path,
+                    exc,
+                )
 
     @router.message(Command("find"), IsAllowedUser())
     async def cmd_find(message: Message, command: CommandObject, state: FSMContext):
