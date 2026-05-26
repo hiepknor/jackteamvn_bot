@@ -100,7 +100,7 @@ if [ ! -f "$ENV_FILE" ]; then
   echo "=================================================="
   echo "Lần chạy đầu: hãy sửa file $ENV_FILE"
   echo "Ít nhất cần sửa: BOT_TOKEN"
-  echo "Có thể sửa thêm: ADMIN_IDS, BOT_NAME..."
+  echo "Có thể sửa thêm: TELEGRAM_ALLOWED_USER_IDS, BOT_NAME..."
   echo "Sau khi sửa xong, chạy lại file này:"
   echo "  bash $0"
   echo "=================================================="

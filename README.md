@@ -37,8 +37,7 @@ cp .env.example .env
 
 Các biến quan trọng:
 - `BOT_TOKEN`: token bot
-- `ADMIN_IDS`: ví dụ `123456789,987654321`
-- `PRIVATE_BOT_MODE=true`: chỉ admin mới dùng được bot
+- `TELEGRAM_ALLOWED_USER_IDS`: ví dụ `123456789,987654321`; để trống thì ai cũng dùng được bot
 - `DB_NAME=data/jackteamvn.db`
 - `FSM_BACKEND=memory|redis`
 - `REDIS_URL=redis://redis:6379/0`
@@ -93,5 +92,5 @@ docker compose logs -f jackteamvn_bot
 
 ## 12) Lưu ý bảo mật
 - Đây là bot nội bộ, không nên public token và file `.env`
-- Khi `PRIVATE_BOT_MODE=true`, chỉ `ADMIN_IDS` mới được truy cập bot
-- Các thao tác ghi dữ liệu (`/add`, `/edit`, `/delete`, `/backup`, `/normalize`, `/export`) yêu cầu quyền admin
+- Khi `TELEGRAM_ALLOWED_USER_IDS` có giá trị, chỉ các ID trong danh sách mới truy cập được bot
+- Khi `TELEGRAM_ALLOWED_USER_IDS` để trống, mọi người có thể dùng bot và thực hiện thao tác ghi dữ liệu

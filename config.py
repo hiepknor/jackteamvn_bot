@@ -16,8 +16,10 @@ class Settings(BaseSettings):
     BOT_NAME: str = Field("JackStockBot", description="Bot Name")
 
     # Access control
-    ADMIN_IDS: str = Field("", description="Comma/space-separated admin Telegram IDs")
-    PRIVATE_BOT_MODE: bool = Field(True, description="Allow bot access only for admins")
+    TELEGRAM_ALLOWED_USER_IDS: str = Field(
+        "",
+        description="Comma/space-separated Telegram user IDs allowed to use the bot; empty allows everyone",
+    )
 
     # Database
     DB_NAME: str = Field("data/jackteamvn.db", description="SQLite DB path")
@@ -70,35 +72,38 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
-    def validate_private_mode(self) -> "Settings":
-        if self.PRIVATE_BOT_MODE and not self.admin_id_list:
-            raise ValueError("PRIVATE_BOT_MODE=true requires non-empty ADMIN_IDS")
-        if self.invalid_admin_id_tokens:
-            invalid = ", ".join(self.invalid_admin_id_tokens)
-            raise ValueError(f"ADMIN_IDS contains invalid values: {invalid}")
+    def validate_allowed_users(self) -> "Settings":
+        if self.invalid_allowed_user_id_tokens:
+            invalid = ", ".join(self.invalid_allowed_user_id_tokens)
+            raise ValueError(f"TELEGRAM_ALLOWED_USER_IDS contains invalid values: {invalid}")
         return self
 
     @property
-    def admin_id_tokens(self) -> List[str]:
-        """ADMIN_IDS tokens split by comma/space/semicolon."""
-        tokens = re.split(r"[,;\s]+", self.ADMIN_IDS or "")
+    def allowed_user_id_tokens(self) -> List[str]:
+        """TELEGRAM_ALLOWED_USER_IDS tokens split by comma/space/semicolon."""
+        tokens = re.split(r"[,;\s]+", self.TELEGRAM_ALLOWED_USER_IDS or "")
         return [token.strip() for token in tokens if token.strip()]
 
     @property
-    def invalid_admin_id_tokens(self) -> List[str]:
-        """Return invalid ADMIN_IDS tokens (non-numeric)."""
-        return [token for token in self.admin_id_tokens if not token.isdigit()]
+    def invalid_allowed_user_id_tokens(self) -> List[str]:
+        """Return invalid TELEGRAM_ALLOWED_USER_IDS tokens (non-numeric)."""
+        return [token for token in self.allowed_user_id_tokens if not token.isdigit()]
 
     @property
-    def admin_id_list(self) -> List[int]:
-        """Return unique admin IDs from ADMIN_IDS."""
+    def allowed_user_id_list(self) -> List[int]:
+        """Return unique allowed user IDs from TELEGRAM_ALLOWED_USER_IDS."""
         ids: List[int] = []
-        for token in self.admin_id_tokens:
+        for token in self.allowed_user_id_tokens:
             if token.isdigit():
                 value = int(token)
                 if value not in ids:
                     ids.append(value)
         return ids
+
+    def is_user_allowed(self, user_id: int) -> bool:
+        """Allow everyone when no allowlist is configured."""
+        allowed_ids = self.allowed_user_id_list
+        return not allowed_ids or user_id in allowed_ids
 
     @property
     def base_dir(self) -> Path:

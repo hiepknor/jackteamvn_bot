@@ -21,24 +21,15 @@ def actor_tag(message: Message) -> str:
 
 
 async def ensure_admin(message: Message) -> bool:
-    """Enforce admin-only action for write operations."""
+    """Enforce TELEGRAM_ALLOWED_USER_IDS for write operations when configured."""
     user = message.from_user
     if not user:
         await message.answer("🚫 Không xác định được người dùng.")
         return False
 
-    if not settings.admin_id_list:
-        await message.answer(
-            "🚫 <b>Chưa cấu hình ADMIN_IDS nên tạm khóa lệnh ghi dữ liệu.</b>\n"
-            "Vui lòng liên hệ quản trị viên.",
-            parse_mode="HTML",
-        )
-        logger.warning("Write action denied: ADMIN_IDS empty | %s", actor_tag(message))
-        return False
-
-    if user.id not in settings.admin_id_list:
+    if not settings.is_user_allowed(user.id):
         await message.answer("🚫 Bạn không có quyền thực hiện thao tác này.")
-        logger.warning("Write action denied for non-admin | %s", actor_tag(message))
+        logger.warning("Write action denied for disallowed user | %s", actor_tag(message))
         return False
 
     return True
@@ -51,10 +42,10 @@ async def ensure_admin_callback(callback: CallbackQuery) -> bool:
             await callback.message.answer("🚫 Không xác định được người dùng.")
         return False
 
-    if not settings.admin_id_list or user.id not in settings.admin_id_list:
+    if not settings.is_user_allowed(user.id):
         if callback.message:
             await callback.message.answer("🚫 Bạn không có quyền thực hiện thao tác này.")
-        logger.warning("Callback admin denied | user_id=%s", user.id)
+        logger.warning("Callback action denied for disallowed user | user_id=%s", user.id)
         return False
 
     return True

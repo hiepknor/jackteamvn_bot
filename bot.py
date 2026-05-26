@@ -65,8 +65,7 @@ async def main():
 
     logger.info("Bot starting")
     logger.info("Startup config | db_path=%s", settings.db_path)
-    logger.info("Startup config | private_mode=%s", settings.PRIVATE_BOT_MODE)
-    logger.info("Startup config | admin_count=%s", len(settings.admin_id_list))
+    logger.info("Startup config | allowed_user_count=%s", len(settings.allowed_user_id_list))
 
     storage, fsm_backend = await create_fsm_storage()
     logger.info("Startup config | fsm_backend=%s", fsm_backend)
