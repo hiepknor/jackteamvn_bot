@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     """Jack Stock Bot configuration."""
 
     # Bot
-    BOT_TOKEN: str = Field(..., description="Telegram Bot Token")
+    TELEGRAM_BOT_TOKEN: str = Field(..., description="Telegram Bot Token")
     BOT_NAME: str = Field("JackStockBot", description="Bot Name")
 
     # Access control
@@ -48,12 +48,12 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
-    @field_validator("BOT_TOKEN")
+    @field_validator("TELEGRAM_BOT_TOKEN")
     @classmethod
     def validate_bot_token(cls, value: str) -> str:
         token = (value or "").strip()
         if not token:
-            raise ValueError("BOT_TOKEN is required and cannot be empty")
+            raise ValueError("TELEGRAM_BOT_TOKEN is required and cannot be empty")
         return token
 
     @field_validator("FSM_BACKEND")

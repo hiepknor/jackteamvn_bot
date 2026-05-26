@@ -99,7 +99,7 @@ if [ ! -f "$ENV_FILE" ]; then
   echo
   echo "=================================================="
   echo "Lần chạy đầu: hãy sửa file $ENV_FILE"
-  echo "Ít nhất cần sửa: BOT_TOKEN"
+  echo "Ít nhất cần sửa: TELEGRAM_BOT_TOKEN"
   echo "Có thể sửa thêm: TELEGRAM_ALLOWED_USER_IDS, BOT_NAME..."
   echo "Sau khi sửa xong, chạy lại file này:"
   echo "  bash $0"
@@ -107,9 +107,9 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 0
 fi
 
-if grep -q "BOT_TOKEN=your_bot_token_here" "$ENV_FILE" || ! grep -q '^BOT_TOKEN=' "$ENV_FILE"; then
+if grep -q "TELEGRAM_BOT_TOKEN=your_bot_token_here" "$ENV_FILE" || ! grep -q '^TELEGRAM_BOT_TOKEN=' "$ENV_FILE"; then
   echo
-  echo "BOT_TOKEN trong $ENV_FILE chưa được cấu hình đúng."
+  echo "TELEGRAM_BOT_TOKEN trong $ENV_FILE chưa được cấu hình đúng."
   echo "Hãy mở file ra sửa rồi chạy lại:"
   echo "  nano $ENV_FILE"
   echo "  bash $0"

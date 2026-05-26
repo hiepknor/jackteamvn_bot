@@ -70,7 +70,7 @@ async def main():
     storage, fsm_backend = await create_fsm_storage()
     logger.info("Startup config | fsm_backend=%s", fsm_backend)
 
-    bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=storage)
 
     dp.include_router(commands_router)

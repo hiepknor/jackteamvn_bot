@@ -6,7 +6,7 @@ from config import Settings
 
 def make_settings(**overrides):
     values = {
-        "BOT_TOKEN": "test-token",
+        "TELEGRAM_BOT_TOKEN": "test-token",
         "TELEGRAM_ALLOWED_USER_IDS": "",
     }
     values.update(overrides)
