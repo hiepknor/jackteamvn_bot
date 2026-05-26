@@ -30,9 +30,11 @@ class MessageFormatter:
     
     @staticmethod
     def format_product_detail(row: Dict[str, Any]) -> str:
+        thumbnail = row.get("thumbnail_path") or "-"
         return (
             f"🆔 <b>ID:</b> <code>{MessageFormatter._safe(row.get('id', 'N/A'))}</code>\n"
             f"📋 <b>Text:</b> <code>{MessageFormatter._safe(MessageFormatter._display_text(row))}</code>\n"
+            f"🖼️ <b>Thumbnail:</b> <code>{MessageFormatter._safe(thumbnail)}</code>\n"
             f"🧩 <b>Normalizer:</b> <code>{MessageFormatter._safe(row.get('normalizer_version', 'N/A'))}</code>\n"
             f"🕐 <b>Created:</b> {MessageFormatter._safe(row.get('created_at', 'N/A'))}\n"
             f"🔄 <b>Updated:</b> {MessageFormatter._safe(row.get('updated_at', 'N/A'))}"

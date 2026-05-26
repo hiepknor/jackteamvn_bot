@@ -4,6 +4,7 @@ from typing import Any, Optional
 
 from database.connection import db
 from services.normalizer import normalizer
+from services.thumbnail import thumbnail_service
 from utils.logger import logger
 
 
@@ -69,7 +70,14 @@ class ProductRepository:
         async with db.get_cursor() as cursor:
             await cursor.execute(
                 """
-                SELECT id, normalized_text, normalizer_version, created_at, updated_at
+                SELECT
+                    id,
+                    normalized_text,
+                    normalizer_version,
+                    thumbnail_path,
+                    thumbnail_updated_at,
+                    created_at,
+                    updated_at
                 FROM products
                 WHERE id = ?
                 """,
@@ -82,7 +90,14 @@ class ProductRepository:
     async def get_all(limit: int | None = None, offset: int = 0) -> list[dict[str, Any]]:
         async with db.get_cursor() as cursor:
             sql = """
-                SELECT id, normalized_text, normalizer_version, created_at, updated_at
+                SELECT
+                    id,
+                    normalized_text,
+                    normalizer_version,
+                    thumbnail_path,
+                    thumbnail_updated_at,
+                    created_at,
+                    updated_at
                 FROM products
                 ORDER BY id DESC
             """
@@ -125,7 +140,14 @@ class ProductRepository:
         where_clause = " OR ".join(conditions)
         async with db.get_cursor() as cursor:
             await cursor.execute(f"""
-                SELECT id, normalized_text, normalizer_version, created_at, updated_at
+                SELECT
+                    id,
+                    normalized_text,
+                    normalizer_version,
+                    thumbnail_path,
+                    thumbnail_updated_at,
+                    created_at,
+                    updated_at
                 FROM products
                 WHERE {where_clause}
                 ORDER BY
@@ -175,6 +197,43 @@ class ProductRepository:
                 logger.info("Product updated: ID=%s", product_id)
             
             return updated
+
+    @staticmethod
+    async def update_thumbnail(product_id: int, thumbnail_path: str, user_id: int) -> bool:
+        product = await ProductRepository.get_by_id(product_id)
+        if not product:
+            return False
+
+        async with db.get_cursor() as cursor:
+            await cursor.execute(
+                """
+                UPDATE products
+                SET thumbnail_path = ?, thumbnail_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (thumbnail_path, product_id),
+            )
+            updated = cursor.rowcount > 0
+
+            if updated:
+                await cursor.execute(
+                    """
+                    INSERT INTO audit_log
+                    (user_id, action, entity_type, entity_id, old_value, new_value)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        user_id,
+                        "UPDATE_THUMBNAIL",
+                        "product",
+                        product_id,
+                        product.get("thumbnail_path") or "",
+                        thumbnail_path,
+                    ),
+                )
+                logger.info("Product thumbnail updated: ID=%s", product_id)
+
+            return updated
     
     @staticmethod
     async def delete(product_id: int, user_id: int) -> tuple[bool, dict[str, Any] | None]:
@@ -191,6 +250,7 @@ class ProductRepository:
                     INSERT INTO audit_log (user_id, action, entity_type, entity_id, old_value)
                     VALUES (?, ?, ?, ?, ?)
                 """, (user_id, "DELETE", "product", product_id, str(product)))
+                thumbnail_service.delete_thumbnail(product.get("thumbnail_path"))
                 logger.info("Product deleted: ID=%s", product_id)
             
             return deleted, product

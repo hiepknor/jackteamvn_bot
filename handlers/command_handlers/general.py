@@ -5,12 +5,13 @@ from html import escape
 from aiogram import Router
 from aiogram.filters import Command, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import FSInputFile, Message
 
 from database.repositories import product_repo
 from handlers.filters import IsAllowedUser
 from handlers.states import FindProductState
 from services.formatter import formatter
+from services.thumbnail import thumbnail_service
 from .shared import send_chunked_message
 
 
@@ -30,6 +31,7 @@ def register(router: Router) -> None:
             "➕ /add - Thêm sản phẩm\n"
             "✏️ /edit - Sửa theo ID\n"
             "🗑️ /delete &lt;id,id2&gt; - Xóa có xác nhận\n"
+            "🖼️ /thumbnail &lt;id&gt; - Gán ảnh thumbnail\n"
             "📤 /export - Xuất TXT/CSV\n"
             "📊 /stats - Thống kê\n"
             "❌ /cancel - Hủy thao tác",
@@ -48,6 +50,7 @@ def register(router: Router) -> None:
             "• /add - Thêm nhiều dòng, có preview + xác nhận\n"
             "• /edit - Sửa theo ID, có preview trước/sau\n"
             "• /delete &lt;id,id2,...&gt; - Xóa nhiều ID, có xác nhận\n"
+            "• /thumbnail &lt;id&gt; - Gán/thay thumbnail cho sản phẩm\n"
             "• /normalize - Chuẩn hóa dữ liệu hiện có\n"
             "• /backup - Tạo bản sao lưu DB\n"
             "• /export - Xuất dữ liệu TXT/CSV\n\n"
@@ -124,6 +127,17 @@ def register(router: Router) -> None:
 
         text = formatter.format_search_results(query, rows)
         await send_chunked_message(message, text)
+
+        for row in rows:
+            thumbnail_path = row.get("thumbnail_path")
+            resolved_path = thumbnail_service.resolve_path(thumbnail_path)
+            if not resolved_path or not resolved_path.exists():
+                continue
+            await message.answer_photo(
+                FSInputFile(resolved_path),
+                caption=formatter.format_product_short(row),
+                parse_mode="HTML",
+            )
 
     @router.message(Command("find"), IsAllowedUser())
     async def cmd_find(message: Message, command: CommandObject, state: FSMContext):

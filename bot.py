@@ -51,6 +51,7 @@ async def setup_bot_commands(bot: Bot):
             BotCommand(command="add", description="➕ Thêm sản phẩm"),
             BotCommand(command="edit", description="✏️ Sửa sản phẩm"),
             BotCommand(command="delete", description="🗑️ Xóa sản phẩm"),
+            BotCommand(command="thumbnail", description="🖼️ Gán ảnh thumbnail"),
             BotCommand(command="export", description="📤 Xuất dữ liệu"),
             BotCommand(command="stats", description="📊 Thống kê"),
             BotCommand(command="normalize", description="🧹 Chuẩn hóa dữ liệu"),

@@ -20,6 +20,8 @@ async def init_database() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 normalized_text TEXT NOT NULL,
                 normalizer_version TEXT NOT NULL DEFAULT 'v2',
+                thumbnail_path TEXT,
+                thumbnail_updated_at TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
@@ -38,6 +40,14 @@ async def init_database() -> None:
                 "ALTER TABLE products ADD COLUMN normalizer_version TEXT DEFAULT 'v2'"
             )
             logger.info("Added products.normalizer_version column")
+
+        if "thumbnail_path" not in product_columns:
+            await cursor.execute("ALTER TABLE products ADD COLUMN thumbnail_path TEXT")
+            logger.info("Added products.thumbnail_path column")
+
+        if "thumbnail_updated_at" not in product_columns:
+            await cursor.execute("ALTER TABLE products ADD COLUMN thumbnail_updated_at TEXT")
+            logger.info("Added products.thumbnail_updated_at column")
 
         if "raw_text" in product_columns:
             await cursor.execute(

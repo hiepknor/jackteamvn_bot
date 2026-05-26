@@ -3,16 +3,17 @@ from __future__ import annotations
 import re
 from html import escape
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from database.repositories import product_repo
 from handlers.filters import IsAllowedUser
-from handlers.states import AddProductState, DeleteProductState, EditProductState
+from handlers.states import AddProductState, DeleteProductState, EditProductState, ThumbnailState
 from services.formatter import formatter
 from services.normalizer import normalizer
+from services.thumbnail import thumbnail_service
 from utils.logger import logger
 from .shared import (
     MAX_ADD_LINES,
@@ -426,3 +427,77 @@ def register(router: Router) -> None:
             lines.append(f"❓ Không tìm thấy: {', '.join(map(str, not_found_ids))}")
 
         await message.answer("\n".join(lines), parse_mode="HTML")
+
+    @router.message(Command("thumbnail"), IsAllowedUser())
+    async def cmd_thumbnail(message: Message, state: FSMContext, command: CommandObject):
+        if not await ensure_allowed_user(message):
+            return
+
+        product_id_text = (command.args or "").strip()
+        if not product_id_text.isdigit() or int(product_id_text) <= 0:
+            await message.answer("⚠️ Dùng: <code>/thumbnail &lt;id&gt;</code>", parse_mode="HTML")
+            return
+
+        product_id = int(product_id_text)
+        product = await product_repo.get_by_id(product_id)
+        if not product:
+            await message.answer("❓ Không tìm thấy sản phẩm.")
+            return
+
+        await state.clear()
+        await state.update_data(product_id=product_id)
+        await state.set_state(ThumbnailState.awaiting_photo)
+        await message.answer(
+            "🖼️ <b>Gửi ảnh thumbnail cho sản phẩm:</b>\n\n"
+            f"{formatter.format_product_short(product)}\n\n"
+            "Bot sẽ resize ảnh thành JPEG 512px. Dùng /cancel để hủy.",
+            parse_mode="HTML",
+        )
+
+    @router.message(ThumbnailState.awaiting_photo, IsAllowedUser(), F.photo)
+    async def thumbnail_photo_handler(message: Message, state: FSMContext):
+        if not await ensure_allowed_user(message):
+            await state.clear()
+            return
+
+        data = await state.get_data()
+        product_id = int(data["product_id"])
+        product = await product_repo.get_by_id(product_id)
+        if not product:
+            await state.clear()
+            await message.answer("❓ Sản phẩm không còn tồn tại.")
+            return
+
+        photo = message.photo[-1]
+        buffer = await message.bot.download(photo.file_id)
+        if buffer is None:
+            await message.answer("❌ Không tải được ảnh từ Telegram. Vui lòng thử lại.")
+            return
+
+        try:
+            image_bytes = buffer.read()
+            thumbnail_path = thumbnail_service.save_jpeg_thumbnail(product_id, image_bytes)
+            updated = await product_repo.update_thumbnail(product_id, thumbnail_path, message.from_user.id)
+        except Exception as exc:
+            logger.error("Thumbnail update failed | %s | product_id=%s err=%s", actor_tag(message), product_id, exc)
+            await state.clear()
+            await message.answer("❌ Lỗi khi lưu thumbnail. Vui lòng thử lại.")
+            return
+
+        await state.clear()
+        if not updated:
+            thumbnail_service.delete_thumbnail(thumbnail_path)
+            await message.answer("❌ Không cập nhật được thumbnail. Sản phẩm có thể không còn tồn tại.")
+            return
+
+        logger.info("User thumbnail update success | %s | product_id=%s", actor_tag(message), product_id)
+        updated_product = await product_repo.get_by_id(product_id)
+        await message.answer(
+            "✅ Đã cập nhật thumbnail:\n\n"
+            f"{formatter.format_product_detail(updated_product)}",
+            parse_mode="HTML",
+        )
+
+    @router.message(ThumbnailState.awaiting_photo, IsAllowedUser())
+    async def thumbnail_invalid_handler(message: Message):
+        await message.answer("⚠️ Vui lòng gửi ảnh thumbnail hoặc dùng /cancel để hủy.")

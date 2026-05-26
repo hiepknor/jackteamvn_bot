@@ -2,6 +2,7 @@ import asyncio
 import sqlite3
 from pathlib import Path
 
+from database.connection import db
 from database import models
 
 
@@ -34,3 +35,24 @@ def test_backup_database_uses_sqlite_backup_api(tmp_path, monkeypatch):
 
     assert row is not None
     assert row[0] == 1
+
+
+def test_init_database_adds_thumbnail_columns(tmp_path, monkeypatch):
+    db_path = tmp_path / "main.db"
+
+    async def scenario():
+        original_db_path = db.db_path
+        try:
+            db.db_path = str(db_path)
+            await db.connect()
+            await models.init_database()
+            async with db.get_cursor() as cursor:
+                await cursor.execute("PRAGMA table_info(products)")
+                columns = {row["name"] for row in await cursor.fetchall()}
+            assert "thumbnail_path" in columns
+            assert "thumbnail_updated_at" in columns
+        finally:
+            await db.close()
+            db.db_path = original_db_path
+
+    asyncio.run(scenario())

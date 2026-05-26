@@ -20,6 +20,12 @@ class DeleteProductState(StatesGroup):
     confirm = State()
 
 
+class ThumbnailState(StatesGroup):
+    """State group for assigning product thumbnails"""
+    product_id = State()
+    awaiting_photo = State()
+
+
 class FindProductState(StatesGroup):
     """State group for finding products"""
     awaiting_query = State()
