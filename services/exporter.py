@@ -1,7 +1,7 @@
 import csv
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 
 from config import settings
 from database.repositories import product_repo
@@ -12,18 +12,24 @@ class Exporter:
     """Exporter for Jack Stock Bot"""
 
     @staticmethod
-    def _image_url(thumbnail_path: str | None) -> str:
+    def _image_url(thumbnail_path: str | None, version: object = None) -> str:
         path = (thumbnail_path or "").strip()
         if not path:
             return ""
         if path.startswith(("http://", "https://")):
-            return path
+            url = path
+        else:
+            base_url = settings.EXPORT_IMAGE_BASE_URL.strip()
+            if not base_url:
+                url = path
+            else:
+                url = urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
 
-        base_url = settings.EXPORT_IMAGE_BASE_URL.strip()
-        if not base_url:
-            return path
+        if not version:
+            return url
 
-        return urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
+        separator = "&" if "?" in url else "?"
+        return f"{url}{separator}v={quote(str(version), safe='')}"
 
     @staticmethod
     def cleanup_old_files() -> None:
@@ -73,7 +79,10 @@ class Exporter:
                     {
                         "title": f"Item {index}",
                         "captionText": f"Looking for {row.get('normalized_text', '')}",
-                        "imageUrl": Exporter._image_url(row.get("thumbnail_path")),
+                        "imageUrl": Exporter._image_url(
+                            row.get("thumbnail_path"),
+                            row.get("thumbnail_updated_at") or row.get("updated_at") or row.get("id"),
+                        ),
                     }
                 )
 

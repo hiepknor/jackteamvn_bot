@@ -33,13 +33,9 @@ def test_export_csv_uses_listing_schema(tmp_path, monkeypatch):
                 rows = list(reader)
 
             assert reader.fieldnames == ["title", "captionText", "imageUrl"]
-            assert rows == [
-                {
-                    "title": "Item 1",
-                    "captionText": "Looking for PP 7118/1450G new 2026",
-                    "imageUrl": "https://example.com/storage/thumbnails/product_1.jpg",
-                }
-            ]
+            assert rows[0]["title"] == "Item 1"
+            assert rows[0]["captionText"] == "Looking for PP 7118/1450G new 2026"
+            assert rows[0]["imageUrl"].startswith("https://example.com/storage/thumbnails/product_1.jpg?v=")
         finally:
             await db.close()
             db.db_path = original_db_path
