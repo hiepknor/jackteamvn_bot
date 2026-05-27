@@ -25,19 +25,125 @@ from .shared import (
 )
 
 
+def _extract_add_text(message: Message, command: CommandObject | None = None) -> str:
+    if command and command.args:
+        return command.args.strip()
+
+    raw_text = (message.text or message.caption or "").strip()
+    if not raw_text:
+        return ""
+
+    return re.sub(r"^/add(?:@\w+)?(?:\s+)?", "", raw_text, count=1, flags=re.IGNORECASE).strip()
+
+
+def _message_thumbnail_file_id(message: Message) -> str | None:
+    if not message.photo:
+        return None
+    return message.photo[-1].file_id
+
+
+async def _prepare_add_products(
+    message: Message,
+    state: FSMContext,
+    raw_text: str,
+    thumbnail_file_id: str | None = None,
+) -> None:
+    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+    if not lines:
+        await message.answer("⚠️ Không có dòng hợp lệ để thêm.")
+        return
+    if len(lines) > MAX_ADD_LINES:
+        await message.answer(f"⚠️ Tối đa {MAX_ADD_LINES} dòng mỗi lần thêm.")
+        return
+    if thumbnail_file_id and len(lines) != 1:
+        await message.answer(
+            "⚠️ Khi gửi ảnh kèm caption, caption chỉ được chứa 1 sản phẩm.\n"
+            "Nếu thêm danh sách, hãy gửi dạng text không kèm ảnh.",
+            parse_mode="HTML",
+        )
+        return
+
+    valid_lines: list[str] = []
+    too_long_idx: list[int] = []
+    empty_after_normalize_idx: list[int] = []
+
+    for idx, line in enumerate(lines, 1):
+        if len(line) > MAX_RAW_LINE_LENGTH:
+            too_long_idx.append(idx)
+            continue
+        normalized = normalizer.normalize(line)
+        if not normalized:
+            empty_after_normalize_idx.append(idx)
+            continue
+        valid_lines.append(normalized)
+
+    invalid_count = len(too_long_idx) + len(empty_after_normalize_idx)
+    if not valid_lines:
+        await message.answer(
+            "⚠️ Không có dòng hợp lệ để thêm.\n"
+            f"• Tổng dòng nhận: {len(lines)}\n"
+            f"• Dòng quá dài: {len(too_long_idx)}\n"
+            f"• Dòng rỗng sau chuẩn hóa: {len(empty_after_normalize_idx)}",
+            parse_mode="HTML",
+        )
+        return
+
+    await state.update_data(
+        pending_products=valid_lines,
+        pending_thumbnail_file_id=thumbnail_file_id,
+        add_total_input=len(lines),
+        add_invalid_count=invalid_count,
+    )
+    await state.set_state(AddProductState.confirm)
+
+    preview_lines = ["📋 <b>Preview sản phẩm sẽ thêm</b>", ""]
+    for i, normalized in enumerate(valid_lines[:30], 1):
+        suffix = "..." if len(normalized) > 80 else ""
+        preview_lines.append(f"{i}. <code>{escape(normalized[:80])}</code>{suffix}")
+    if len(valid_lines) > 30:
+        preview_lines.append(f"... và {len(valid_lines) - 30} dòng hợp lệ khác")
+
+    preview_lines.extend(
+        [
+            "",
+            f"✅ Hợp lệ: <b>{len(valid_lines)}</b>",
+            f"⚠️ Không hợp lệ: <b>{invalid_count}</b>",
+        ]
+    )
+
+    if thumbnail_file_id:
+        preview_lines.append("🖼️ Thumbnail: <b>sẽ lưu từ ảnh đã gửi</b>")
+    if too_long_idx:
+        preview_lines.append(
+            f"• Dòng quá dài (&gt;{MAX_RAW_LINE_LENGTH} ký tự): {format_line_numbers(too_long_idx)}"
+        )
+    if empty_after_normalize_idx:
+        preview_lines.append(f"• Dòng rỗng sau chuẩn hóa: {format_line_numbers(empty_after_normalize_idx)}")
+
+    preview_lines.extend(["", formatter.format_confirmation("thêm", f"{len(valid_lines)} sản phẩm")])
+    await send_chunked_message(message, "\n".join(preview_lines))
+
+
 def register(router: Router) -> None:
     @router.message(Command("add"), IsAllowedUser())
-    async def cmd_add(message: Message, state: FSMContext):
+    async def cmd_add(message: Message, state: FSMContext, command: CommandObject):
         if not await ensure_allowed_user(message):
             return
 
         await state.clear()
+        raw_text = _extract_add_text(message, command)
+        thumbnail_file_id = _message_thumbnail_file_id(message)
+        if raw_text:
+            await _prepare_add_products(message, state, raw_text, thumbnail_file_id)
+            return
+
         await state.set_state(AddProductState.raw_lines)
         await message.answer(
             "➕ <b>Thêm sản phẩm mới</b>\n\n"
             "📌 Gửi 1 hoặc nhiều dòng, mỗi dòng là 1 sản phẩm:\n"
             "<code>RL 126528LN leman new 11/2025//1.6m hkd</code>\n"
             "<code>RL 116515LN mete 2022///605.000 hkd</code>\n\n"
+            "Hoặc gửi 1 ảnh kèm caption là nội dung sản phẩm để lưu luôn thumbnail.\n\n"
             "Bot sẽ preview trước khi lưu. Dùng /cancel để hủy.",
             parse_mode="HTML",
         )
@@ -48,77 +154,13 @@ def register(router: Router) -> None:
             await state.clear()
             return
 
-        text = (message.text or "").strip()
-        if not text:
+        raw_text = _extract_add_text(message)
+        thumbnail_file_id = _message_thumbnail_file_id(message)
+        if not raw_text:
             await message.answer("⚠️ Nội dung trống. Vui lòng gửi lại.")
             return
 
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        if not lines:
-            await message.answer("⚠️ Không có dòng hợp lệ để thêm.")
-            return
-        if len(lines) > MAX_ADD_LINES:
-            await message.answer(f"⚠️ Tối đa {MAX_ADD_LINES} dòng mỗi lần thêm.")
-            return
-
-        valid_lines: list[str] = []
-        too_long_idx: list[int] = []
-        empty_after_normalize_idx: list[int] = []
-
-        for idx, line in enumerate(lines, 1):
-            if len(line) > MAX_RAW_LINE_LENGTH:
-                too_long_idx.append(idx)
-                continue
-            normalized = normalizer.normalize(line)
-            if not normalized:
-                empty_after_normalize_idx.append(idx)
-                continue
-            valid_lines.append(normalized)
-
-        invalid_count = len(too_long_idx) + len(empty_after_normalize_idx)
-        if not valid_lines:
-            await message.answer(
-                "⚠️ Không có dòng hợp lệ để thêm.\n"
-                f"• Tổng dòng nhận: {len(lines)}\n"
-                f"• Dòng quá dài: {len(too_long_idx)}\n"
-                f"• Dòng rỗng sau chuẩn hóa: {len(empty_after_normalize_idx)}",
-                parse_mode="HTML",
-            )
-            return
-
-        await state.update_data(
-            pending_products=valid_lines,
-            add_total_input=len(lines),
-            add_invalid_count=invalid_count,
-        )
-        await state.set_state(AddProductState.confirm)
-
-        preview_lines = ["📋 <b>Preview sản phẩm sẽ thêm</b>", ""]
-        for i, normalized in enumerate(valid_lines[:30], 1):
-            suffix = "..." if len(normalized) > 80 else ""
-            preview_lines.append(f"{i}. <code>{escape(normalized[:80])}</code>{suffix}")
-        if len(valid_lines) > 30:
-            preview_lines.append(f"... và {len(valid_lines) - 30} dòng hợp lệ khác")
-
-        preview_lines.extend(
-            [
-                "",
-                f"✅ Hợp lệ: <b>{len(valid_lines)}</b>",
-                f"⚠️ Không hợp lệ: <b>{invalid_count}</b>",
-            ]
-        )
-
-        if too_long_idx:
-            preview_lines.append(
-                f"• Dòng quá dài (&gt;{MAX_RAW_LINE_LENGTH} ký tự): {format_line_numbers(too_long_idx)}"
-            )
-        if empty_after_normalize_idx:
-            preview_lines.append(
-                f"• Dòng rỗng sau chuẩn hóa: {format_line_numbers(empty_after_normalize_idx)}"
-            )
-
-        preview_lines.extend(["", formatter.format_confirmation("thêm", f"{len(valid_lines)} sản phẩm")])
-        await send_chunked_message(message, "\n".join(preview_lines))
+        await _prepare_add_products(message, state, raw_text, thumbnail_file_id)
 
     @router.message(AddProductState.confirm, IsAllowedUser())
     async def add_confirm_handler(message: Message, state: FSMContext):
@@ -136,7 +178,7 @@ def register(router: Router) -> None:
         invalid_count = int(data.get("add_invalid_count", 0))
 
         try:
-            count = await product_repo.create_batch(
+            created_ids = await product_repo.create_many(
                 pending_lines,
                 message.from_user.id,
                 normalizer_version=normalizer.VERSION,
@@ -147,19 +189,53 @@ def register(router: Router) -> None:
             await message.answer("❌ Lỗi khi thêm sản phẩm. Không có dữ liệu nào được lưu.")
             return
 
+        thumbnail_file_id = data.get("pending_thumbnail_file_id")
+        thumbnail_saved = False
+        thumbnail_failed = False
+        if thumbnail_file_id and len(created_ids) == 1:
+            thumbnail_path = None
+            try:
+                buffer = await message.bot.download(thumbnail_file_id)
+                if buffer is None:
+                    raise RuntimeError("Telegram returned empty thumbnail download")
+
+                thumbnail_path = thumbnail_service.save_jpeg_thumbnail(created_ids[0], buffer.read())
+                thumbnail_saved = await product_repo.update_thumbnail(
+                    created_ids[0],
+                    thumbnail_path,
+                    message.from_user.id,
+                )
+                if not thumbnail_saved and thumbnail_path:
+                    thumbnail_service.delete_thumbnail(thumbnail_path)
+            except Exception as exc:
+                thumbnail_failed = True
+                if thumbnail_path:
+                    thumbnail_service.delete_thumbnail(thumbnail_path)
+                logger.error(
+                    "Add thumbnail failed | %s | product_id=%s err=%s",
+                    actor_tag(message),
+                    created_ids[0],
+                    exc,
+                    exc_info=exc,
+                )
+
         logger.info(
             "User add success | %s | created=%s invalid=%s",
             actor_tag(message),
-            count,
+            len(created_ids),
             invalid_count,
         )
         await state.clear()
-        await message.answer(
+        lines = [
             "✅ Đã thêm sản phẩm thành công.\n"
-            f"• Đã lưu: <b>{count}</b>\n"
+            f"• Đã lưu: <b>{len(created_ids)}</b>",
             f"• Bỏ qua: <b>{invalid_count}</b>",
-            parse_mode="HTML",
-        )
+        ]
+        if thumbnail_saved:
+            lines.append("• Thumbnail: <b>đã lưu</b>")
+        elif thumbnail_failed:
+            lines.append("• Thumbnail: <b>lỗi lưu ảnh, sản phẩm vẫn đã được thêm</b>")
+        await message.answer("\n".join(lines), parse_mode="HTML")
 
     @router.message(Command("edit"), IsAllowedUser())
     async def cmd_edit(message: Message, state: FSMContext):

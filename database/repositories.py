@@ -42,10 +42,19 @@ class ProductRepository:
         user_id: int,
         normalizer_version: str = "v2",
     ) -> int:
-        if not normalized_texts:
-            return 0
+        created_ids = await ProductRepository.create_many(normalized_texts, user_id, normalizer_version)
+        return len(created_ids)
 
-        created_count = 0
+    @staticmethod
+    async def create_many(
+        normalized_texts: list[str],
+        user_id: int,
+        normalizer_version: str = "v2",
+    ) -> list[int]:
+        if not normalized_texts:
+            return []
+
+        created_ids: list[int] = []
         async with db.get_cursor() as cursor:
             for normalized_text in normalized_texts:
                 await cursor.execute(
@@ -60,10 +69,10 @@ class ProductRepository:
                     """,
                     (user_id, "CREATE", "product", product_id, normalized_text),
                 )
-                created_count += 1
+                created_ids.append(int(product_id))
 
-        logger.info("Batch created %s products", created_count)
-        return created_count
+        logger.info("Batch created %s products", len(created_ids))
+        return created_ids
     
     @staticmethod
     async def get_by_id(product_id: int) -> dict[str, Any] | None:
