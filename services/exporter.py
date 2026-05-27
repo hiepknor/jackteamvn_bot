@@ -78,7 +78,7 @@ class Exporter:
                 writer.writerow(
                     {
                         "title": f"Item {index}",
-                        "captionText": f"Looking for {row.get('normalized_text', '')}",
+                        "captionText": row.get("normalized_text", ""),
                         "imageUrl": Exporter._image_url(
                             row.get("thumbnail_path"),
                             row.get("thumbnail_updated_at") or row.get("updated_at") or row.get("id"),
