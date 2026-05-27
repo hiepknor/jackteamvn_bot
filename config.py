@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     STORAGE_DIR: str = Field("storage", description="Storage directory")
     EXPORT_KEEP_COUNT: int = Field(10, description="Keep N recent export files")
     MAX_EXPORT_ROWS: int = Field(10000, description="Max rows per export")
+    EXPORT_IMAGE_BASE_URL: str = Field(
+        "",
+        description="Optional public base URL used to convert stored thumbnail paths to CSV imageUrl values",
+    )
 
     # Logging
     LOG_LEVEL: str = Field("INFO", description="Logging level")

@@ -1,6 +1,7 @@
 import csv
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urljoin
 
 from config import settings
 from database.repositories import product_repo
@@ -9,6 +10,20 @@ from utils.logger import logger
 
 class Exporter:
     """Exporter for Jack Stock Bot"""
+
+    @staticmethod
+    def _image_url(thumbnail_path: str | None) -> str:
+        path = (thumbnail_path or "").strip()
+        if not path:
+            return ""
+        if path.startswith(("http://", "https://")):
+            return path
+
+        base_url = settings.EXPORT_IMAGE_BASE_URL.strip()
+        if not base_url:
+            return path
+
+        return urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
 
     @staticmethod
     def cleanup_old_files() -> None:
@@ -48,21 +63,19 @@ class Exporter:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = settings.export_dir / f"products_{timestamp}.csv"
 
-        fieldnames = [
-            "id",
-            "normalized_text",
-            "normalizer_version",
-            "thumbnail_path",
-            "thumbnail_updated_at",
-            "created_at",
-            "updated_at",
-        ]
+        fieldnames = ["title", "captionText", "imageUrl"]
 
-        with path.open("w", encoding="utf-8-sig", newline="") as f:
+        with path.open("w", encoding="utf-8", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
-            for row in reversed(rows):
-                writer.writerow({k: row.get(k, "") for k in fieldnames})
+            for index, row in enumerate(reversed(rows), 1):
+                writer.writerow(
+                    {
+                        "title": f"Item {index}",
+                        "captionText": f"Looking for {row.get('normalized_text', '')}",
+                        "imageUrl": Exporter._image_url(row.get("thumbnail_path")),
+                    }
+                )
 
         logger.info("Exported %s products to CSV: %s", len(rows), path)
         Exporter.cleanup_old_files()
