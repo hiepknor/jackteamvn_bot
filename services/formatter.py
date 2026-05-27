@@ -84,6 +84,19 @@ class MessageFormatter:
         return "\n".join(lines)
 
     @staticmethod
+    def format_search_summary(query: str, total: int, text_rows: List[Dict[str, Any]]) -> str:
+        query_safe = MessageFormatter._safe(query)
+        lines = [
+            f"🔍 <b>Kết quả tìm kiếm:</b> <code>{query_safe}</code>",
+            f"📄 Tìm thấy: <b>{total}</b> sản phẩm",
+        ]
+        if text_rows:
+            lines.append("")
+            for row in text_rows:
+                lines.append(MessageFormatter.format_product_short(row))
+        return "\n".join(lines)
+
+    @staticmethod
     def format_confirmation(action: str, details: str) -> str:
         return (
             f"⚠️ <b>Xác nhận {escape(action)}?</b>\n"

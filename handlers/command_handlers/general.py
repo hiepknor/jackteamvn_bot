@@ -126,13 +126,26 @@ def register(router: Router) -> None:
             )
             return
 
-        text = formatter.format_search_results(query, rows)
-        await send_chunked_message(message, text)
+        rows_with_photos = []
+        rows_without_photos = []
 
         for row in rows:
             thumbnail_path = row.get("thumbnail_path")
             resolved_path = thumbnail_service.resolve_path(thumbnail_path)
-            if not resolved_path or not resolved_path.exists():
+            if resolved_path and resolved_path.exists():
+                rows_with_photos.append((row, resolved_path))
+            else:
+                rows_without_photos.append(row)
+
+        if rows_without_photos or len(rows) > 1:
+            await send_chunked_message(
+                message,
+                formatter.format_search_summary(query, len(rows), rows_without_photos),
+            )
+
+        for row, resolved_path in rows_with_photos:
+            thumbnail_path = row.get("thumbnail_path")
+            if not resolved_path.exists():
                 continue
             try:
                 await message.answer_photo(
