@@ -29,21 +29,29 @@ class Exporter:
         ("iwc", (r"\biwc\b",)),
         ("panerai", (r"\bpanerai\b", r"\bpam\b")),
     )
+    _TITLE_PRICE_PATTERN = re.compile(
+        r"(?:\s+|/|-)\d[\d.,]*(?:[kKmM])?\s*(?:HKD|USDT|USD)\b",
+        re.IGNORECASE,
+    )
+    _TITLE_STOP_PATTERN = re.compile(
+        r"\s+(?:like\s+new|only\s+watch|ready\s+in\s+hk|full\s+good|full\s+set|new|used|good)\b",
+        re.IGNORECASE,
+    )
+    _TITLE_DATE_PATTERN = re.compile(r"(?:\s+|/|-)(?:\d{1,2}/)?(?:19|20)\d{2}\b")
 
-    @staticmethod
-    def _title_from_text(text: str | None, fallback: str) -> str:
+    @classmethod
+    def _title_from_text(cls, text: str | None, fallback: str) -> str:
         title = re.sub(r"\s+", " ", (text or "").strip())
         if not title:
             return fallback
 
         title = re.split(r"\s*//\s*", title, maxsplit=1)[0].strip()
-        price_match = re.search(
-            r"\s+\d[\d.,]*(?:[kKmM])?\s*(?:HKD|USDT|USD)\b",
-            title,
-            re.IGNORECASE,
-        )
-        if price_match:
-            title = title[: price_match.start()].strip()
+        for pattern in (cls._TITLE_PRICE_PATTERN, cls._TITLE_STOP_PATTERN, cls._TITLE_DATE_PATTERN):
+            match = pattern.search(title)
+            if match:
+                title = title[: match.start()].strip()
+
+        title = re.sub(r"[\s/\-]+$", "", title).strip()
 
         return title or fallback
 
