@@ -1,10 +1,19 @@
 import asyncio
 import csv
 
+import pytest
+
 from database.connection import db
 from database.models import init_database
 from database.repositories import product_repo
-from services.exporter import exporter
+from services.exporter import CsvExportValidationError, exporter
+
+
+def test_export_csv_tags_from_product_text():
+    assert exporter._tags_from_text("RL 116515LN mete 2022//605,000 HKD") == "rolex,hk"
+    assert exporter._tags_from_text("AP 15500 blue ready in hk") == "ap,hk"
+    assert exporter._tags_from_text("Hublot 507.JX.0800.RT.TAK21 full set 2022//120,000 USDT") == "hublot,usdt"
+    assert exporter._tags_from_text("RM 07-01RG snow like new 2020//229k USD") == "rm,usd"
 
 
 def test_export_csv_uses_listing_schema(tmp_path, monkeypatch):
@@ -19,7 +28,8 @@ def test_export_csv_uses_listing_schema(tmp_path, monkeypatch):
             await db.connect()
             await init_database()
 
-            product_id = await product_repo.create("PP 7118/1450G new 2026", user_id=1)
+            product_text = "PP 7118/1450G new 2026//1,450,000 HKD"
+            product_id = await product_repo.create(product_text, user_id=1)
             assert await product_repo.update_thumbnail(
                 product_id,
                 "storage/thumbnails/product_1.jpg",
@@ -32,10 +42,40 @@ def test_export_csv_uses_listing_schema(tmp_path, monkeypatch):
                 reader = csv.DictReader(f)
                 rows = list(reader)
 
-            assert reader.fieldnames == ["title", "captionText", "imageUrl"]
-            assert rows[0]["title"] == "Item 1"
-            assert rows[0]["captionText"] == "PP 7118/1450G new 2026"
+            assert reader.fieldnames == ["intent", "title", "captionText", "imageUrl", "mediaAssetId", "tags"]
+            assert rows[0]["intent"] == ""
+            assert rows[0]["title"] == "PP 7118/1450G new 2026"
+            assert rows[0]["captionText"] == product_text
             assert rows[0]["imageUrl"].startswith("https://example.com/storage/thumbnails/product_1.jpg?v=")
+            assert rows[0]["mediaAssetId"] == ""
+            assert rows[0]["tags"] == "pp,hk"
+        finally:
+            await db.close()
+            db.db_path = original_db_path
+
+    asyncio.run(scenario())
+
+
+def test_export_csv_requires_image_or_media_asset(tmp_path, monkeypatch):
+    async def scenario():
+        original_db_path = db.db_path
+        try:
+            db.db_path = str(tmp_path / "main.db")
+            export_dir = tmp_path / "exports"
+            monkeypatch.setattr(exporter, "cleanup_old_files", lambda: None)
+            monkeypatch.setattr("services.exporter.settings.EXPORT_DIR", str(export_dir))
+
+            await db.connect()
+            await init_database()
+
+            product_id = await product_repo.create("RL 116515LN mete 2022//605,000 HKD", user_id=1)
+
+            with pytest.raises(CsvExportValidationError) as exc_info:
+                await exporter.export_to_csv()
+
+            assert f"#{product_id}" in str(exc_info.value)
+            assert "imageUrl hoặc mediaAssetId" in str(exc_info.value)
+            assert list(export_dir.glob("*.csv")) == []
         finally:
             await db.close()
             db.db_path = original_db_path

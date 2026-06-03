@@ -30,8 +30,8 @@ def register(router: Router) -> None:
         wait_msg = await message.answer(f"⏳ Đang xuất {total} sản phẩm ra file...")
 
         try:
-            txt_path = await exporter.export_to_txt()
             csv_path = await exporter.export_to_csv()
+            txt_path = await exporter.export_to_txt()
 
             await message.answer_document(FSInputFile(txt_path), caption=f"📄 File TXT ({total} sản phẩm)")
             await message.answer_document(FSInputFile(csv_path), caption=f"📊 File CSV ({total} sản phẩm)")
