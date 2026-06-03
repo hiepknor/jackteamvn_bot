@@ -1,11 +1,11 @@
 import csv
-import re
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote, urljoin
 
 from config import settings
 from database.repositories import product_repo
+from services.listing_parser import listing_parser
 from utils.logger import logger
 
 
@@ -16,64 +16,13 @@ class CsvExportValidationError(ValueError):
 class Exporter:
     """Exporter for Jack Stock Bot"""
 
-    _BRAND_TAG_PATTERNS = (
-        ("rolex", (r"\brl\b", r"\brolex\b")),
-        ("ap", (r"\bap\b", r"\baudemars\b", r"\bpiguet\b")),
-        ("pp", (r"\bpp\b", r"\bpatek\b", r"\bphilippe\b")),
-        ("rm", (r"\brm\b", r"\brichard\s+mille\b")),
-        ("hublot", (r"\bhublot\b",)),
-        ("omega", (r"\bomega\b",)),
-        ("cartier", (r"\bcartier\b",)),
-        ("tudor", (r"\btudor\b",)),
-        ("vc", (r"\bvc\b", r"\bvacheron\b", r"\bconstantin\b")),
-        ("iwc", (r"\biwc\b",)),
-        ("panerai", (r"\bpanerai\b", r"\bpam\b")),
-    )
-    _TITLE_PRICE_PATTERN = re.compile(
-        r"(?:\s+|/|-)\d[\d.,]*(?:[kKmM])?\s*(?:HKD|USDT|USD)\b",
-        re.IGNORECASE,
-    )
-    _TITLE_STOP_PATTERN = re.compile(
-        r"\s+(?:like\s+new|only\s+watch|ready\s+in\s+hk|full\s+good|full\s+set|new|used|good)\b",
-        re.IGNORECASE,
-    )
-    _TITLE_DATE_PATTERN = re.compile(r"(?:\s+|/|-)(?:\d{1,2}/)?(?:19|20)\d{2}\b")
+    @staticmethod
+    def _title_from_text(text: str | None, fallback: str) -> str:
+        return listing_parser.title_from_text(text, fallback)
 
-    @classmethod
-    def _title_from_text(cls, text: str | None, fallback: str) -> str:
-        title = re.sub(r"\s+", " ", (text or "").strip())
-        if not title:
-            return fallback
-
-        title = re.split(r"\s*//\s*", title, maxsplit=1)[0].strip()
-        for pattern in (cls._TITLE_PRICE_PATTERN, cls._TITLE_STOP_PATTERN, cls._TITLE_DATE_PATTERN):
-            match = pattern.search(title)
-            if match:
-                title = title[: match.start()].strip()
-
-        title = re.sub(r"[\s/\-]+$", "", title).strip()
-
-        return title or fallback
-
-    @classmethod
-    def _tags_from_text(cls, text: str | None) -> str:
-        value = (text or "").strip()
-        if not value:
-            return ""
-
-        tags: list[str] = []
-        for tag, patterns in cls._BRAND_TAG_PATTERNS:
-            if any(re.search(pattern, value, re.IGNORECASE) for pattern in patterns):
-                tags.append(tag)
-
-        if re.search(r"\b(?:hk|hkd|hong\s*kong)\b", value, re.IGNORECASE):
-            tags.append("hk")
-        if re.search(r"(?<![A-Za-z])USDT\b", value, re.IGNORECASE):
-            tags.append("usdt")
-        if re.search(r"(?<![A-Za-z])USD\b", value, re.IGNORECASE):
-            tags.append("usd")
-
-        return ",".join(tags)
+    @staticmethod
+    def _tags_from_text(text: str | None) -> str:
+        return listing_parser.tags_from_text(text)
 
     @staticmethod
     def _media_asset_id(row: dict) -> str:

@@ -9,42 +9,6 @@ from database.repositories import product_repo
 from services.exporter import CsvExportValidationError, exporter
 
 
-def test_export_csv_tags_from_product_text():
-    assert exporter._tags_from_text("RL 116515LN mete 2022//605,000 HKD") == "rolex,hk"
-    assert exporter._tags_from_text("AP 15500 blue ready in hk") == "ap,hk"
-    assert exporter._tags_from_text("Hublot 507.JX.0800.RT.TAK21 full set 2022//120,000 USDT") == "hublot,usdt"
-    assert exporter._tags_from_text("RM 07-01RG snow like new 2020//229k USD") == "rm,usd"
-
-
-@pytest.mark.parametrize(
-    ("text", "expected"),
-    [
-        ("Hublot 682.SX.9800.LR.0999//12/2024//260.000 HKD", "Hublot 682.SX.9800.LR.0999"),
-        ("Hublot 507.JX.0800.RT.TAK21 full set 2022//120.000 USDT", "Hublot 507.JX.0800.RT.TAK21"),
-        (
-            "Hublot MP-17 MECA-10 ARSHAM SPLASH titanium sapphire new 2025//55k USDT",
-            "Hublot MP-17 MECA-10 ARSHAM SPLASH titanium sapphire",
-        ),
-        ("A.lange&sohne 182.886 new full set 12/2024//390.000 HKD", "A.lange&sohne 182.886"),
-        (
-            "Zenith Defy 03.A780.400-3/56.M3642 Limited Edition//10/2025//11,000 USDT",
-            "Zenith Defy 03.A780.400-3/56.M3642 Limited Edition",
-        ),
-        ("RL 116515LN mete 2022//605.000 HKD", "RL 116515LN mete"),
-        ("RL 278288RBR used 2020 340k HKD only watch", "RL 278288RBR"),
-        ("AP 26240OR black full good full set 2023//105k USDT", "AP 26240OR black"),
-        ("AP 67651ST white 2019//40k USDT", "AP 67651ST white"),
-        ("AP 26540or/2016/899.000 HKD", "AP 26540or"),
-        ("RM07-01 black ceramic black lips 2023//225k USDT", "RM07-01 black ceramic black lips"),
-        ("AP 15450SR full set 2021 - 310,000 HKD", "AP 15450SR"),
-        ("RM 07-01RG snow like new 2020//229k USDT", "RM 07-01RG snow"),
-        ("PP 7118/1A grey like new 2022 - 560,000 HKD", "PP 7118/1A grey"),
-    ],
-)
-def test_export_csv_title_uses_product_name_only(text, expected):
-    assert exporter._title_from_text(text, "Item 1") == expected
-
-
 def test_export_csv_uses_listing_schema(tmp_path, monkeypatch):
     async def scenario():
         original_db_path = db.db_path
